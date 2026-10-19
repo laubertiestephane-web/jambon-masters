@@ -813,6 +813,15 @@ function startSubs(db){ if(subsStarted) return; subsStarted=true;
   sub(db.collection("expenses"), s=>{ S.expenses = s.docs.map(x=>({...x.data(), id:x.id})); });
   sub(db.collection("wall"), s=>{ S.wall = s.docs.map(x=>({...x.data(), id:x.id})); });
 }
+async function seedIfEmpty(db){
+  try{ const ps=await db.collection("players").get(); if(!ps.empty) return;
+    const batch=db.batch();
+    batch.set(db.doc("config/main"), DEFAULT_CFG);
+    DEFAULT_PLAYERS.forEach(p=>{ const {id,...d}=p; batch.set(db.doc("players/"+id), d); });
+    DEFAULT_DAYS.forEach(d=>{ const {id,...x}=d; batch.set(db.doc("days/"+id), x); });
+    await batch.commit(); toast("Données initiales enregistrées");
+  }catch(e){ console.error("seed",e); }
+}
 (function boot(){
   if(!window.firebase){ S.dbReady=true; render(); return; }
   try{
@@ -825,7 +834,7 @@ function startSubs(db){ if(subsStarted) return; subsStarted=true;
     auth.onAuthStateChanged(u=>{
       if(!u){ auth.signInAnonymously().catch(e=>{ console.error(e); S.canWrite=false; render(); }); return; }
       S.uid=u.uid; S.canWrite=true; S.isOwner = (u.email||"").toLowerCase()===ADMIN_EMAIL;
-      if(S.isOwner) toast("Bonjour l'organisateur !");
+      if(S.isOwner){ toast("Bonjour l'organisateur !"); seedIfEmpty(db); }
       renderTabs(); render();
     });
   }catch(e){ console.error(e); S.dbReady=true; render(); }
