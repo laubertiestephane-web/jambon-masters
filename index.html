@@ -442,6 +442,19 @@ function initials(p){ return (p.nick||p.name).split(/\s+/).map(w=>w[0]).join("")
 function dayTitle(d){ if(d.course==="rest") return d.label||"Pause fraîcheur"; if(d.course==="travel") return d.label||"Voyage"; const c=COURSES[d.course]; return c? c.name : (d.label||"Golf"); }
 function points(){ let a=0,b=0; for(const d of S.days){ if(d.result==="A")a++; else if(d.result==="B")b++; else if(d.result==="draw"){a+=.5;b+=.5;} } return {a,b}; }
 function mvp(){ const pts={}; S.players.forEach(p=>pts[p.id]=0); for(const d of S.days){ if(!d.result) continue; for(const p of S.players){ if(!p.team) continue; if(d.result==="draw") pts[p.id]+=.5; else if(d.result===p.team) pts[p.id]+=1; } } return S.players.slice().sort((a,b)=>pts[b.id]-pts[a.id]||a.order-b.order).map(p=>({...p,pts:pts[p.id]})); }
+// Tirage des parties : on cherche la combinaison où chacun retrouve le moins possible
+// de joueurs (partenaires ou adversaires) déjà croisés les autres jours.
+function smartDraw(dayId){
+  const A=teamOf("A").map(p=>p.id), B=teamOf("B").map(p=>p.id); if(A.length<6||B.length<6) return null;
+  const seen={}; const key=(x,y)=>x<y?x+"|"+y:y+"|"+x;
+  for(const d of S.days){ if(d.id===dayId) continue; for(const m of (d.matches||[])){ const four=[...(m.a||[]),...(m.b||[])].filter(Boolean); for(let i=0;i<four.length;i++) for(let j=i+1;j<four.length;j++) seen[key(four[i],four[j])]=(seen[key(four[i],four[j])]||0)+1; } }
+  const shuffle=a=>a.slice().sort(()=>Math.random()-.5);
+  let best=null, bestScore=Infinity;
+  for(let n=0;n<600;n++){ const a=shuffle(A), bb=shuffle(B); const ms=[0,1,2].map(i=>({a:[a[2*i],a[2*i+1]],b:[bb[2*i],bb[2*i+1]]}));
+    let score=0; for(const m of ms){ const four=[...m.a,...m.b]; for(let i=0;i<4;i++) for(let j=i+1;j<4;j++){ const c=seen[key(four[i],four[j])]||0; score+= c*c*(i<2&&j<2||i>=2&&j>=2?2:1); } }
+    if(score<bestScore){ bestScore=score; best=ms; if(score===0) break; } }
+  return best;
+}
 function matchesHtml(d){ const ms=(d.matches||[]).filter(m=>m && (m.a||[]).some(Boolean) || (m.b||[]).some(Boolean)); if(!ms.length) return ""; const nm=id=>{const p=playerById(id); return p?esc(p.nick):"—";};
   return `<div class="matches">${ms.map((m,i)=>`<div class="match"><span class="mn">${i+1}</span><span class="mA">${(m.a||[]).map(nm).join(" & ")}</span><span class="mv">${PIG_HEAD.replace('class="pighead"','class="pighead sm"')}</span><span class="mB">${(m.b||[]).map(nm).join(" & ")}</span></div>`).join("")}</div>`; }
 function fmtPts(n){ return Number.isInteger(n)? String(n) : n.toFixed(1).replace(".",","); }
@@ -804,7 +817,7 @@ function renderAdmin(){
     el.querySelectorAll("[data-f]").forEach(i=>i.oninput=e=>{ d[i.dataset.f]=e.target.value; if(i.dataset.f==="course"){ save("days/"+d.id,{...d}); renderAdmin(); } else ds(); });
     el.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ d.result=b.dataset.r; save("days/"+d.id,{...d}); renderAdmin(); });
     el.querySelectorAll("select[data-m]").forEach(s=>s.onchange=()=>{ const ms=[0,1,2].map(i=>(d.matches||[])[i]||{a:["",""],b:["",""]}); const m=ms[+s.dataset.m]; m[s.dataset.side]=[...(m[s.dataset.side]||["",""])]; m[s.dataset.side][+s.dataset.k]=s.value; d.matches=ms; save("days/"+d.id,{...d}); });
-    el.querySelectorAll("[data-shufflematches]").forEach(b=>b.onclick=()=>{ const A=teamOf("A").map(p=>p.id).sort(()=>Math.random()-.5), B=teamOf("B").map(p=>p.id).sort(()=>Math.random()-.5); if(A.length<6||B.length<6) return toast("Il faut 6 joueurs par équipe"); d.matches=[0,1,2].map(i=>({a:[A[2*i],A[2*i+1]],b:[B[2*i],B[2*i+1]]})); save("days/"+d.id,{...d}); renderAdmin(); });
+    el.querySelectorAll("[data-shufflematches]").forEach(b=>b.onclick=()=>{ const r=smartDraw(d.id); if(!r) return toast("Il faut 6 joueurs par équipe"); d.matches=r; save("days/"+d.id,{...d}); renderAdmin(); toast("Parties tirées : chacun joue avec un maximum de copains différents"); });
     el.querySelectorAll("[data-rmphoto]").forEach(b=>b.onclick=()=>confirmSheet("Retirer la photo de cette journée ?",async()=>{ await S.db.doc("photos/"+d.id).delete(); toast("Photo retirée"); })); });
   const plSave={}; root.querySelectorAll("[data-pl]").forEach(i=>i.oninput=e=>{ const p=playerById(i.dataset.pl); p[i.dataset.f]=e.target.value; (plSave[p.id]||(plSave[p.id]=debounce(()=>save("players/"+p.id,{...p}),600)))(); });
 }
