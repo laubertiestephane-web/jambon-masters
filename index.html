@@ -19,7 +19,7 @@
 :root{
   --bg:#FAF5F6; --surface:#FFFFFF; --surface2:#F3E9EC; --fg:#1B1F2E; --muted:#6B6672;
   --pink:#E3146B; --pink-soft:#FBD5E3; --navy:#14213D; --navy-ink:#14213D; --line:#E6D9DE;
-  --ok:#2E8B57; --warn:#D98A1E; --teamA:#E3146B; --teamB:#1A206D; --on-navy:#FFFFFF;
+  --ok:#2E8B57; --warn:#D98A1E; --teamA:#EA2839; --teamB:#1A206D; --on-navy:#FFFFFF;
   --display:'Alfa Slab One', 'Rockwell', serif; --body:'Nunito Sans', system-ui, -apple-system, sans-serif;
   --r:16px; --shadow:0 6px 20px rgba(20,33,61,.08);
 }
@@ -183,6 +183,13 @@ img{max-width:100%}
 .me-avatar svg,.me-avatar img{width:100%;height:100%;display:block;object-fit:cover}
 .greet{font-size:.85rem;color:var(--pink);font-weight:800}
 .pighead{width:46px;height:46px;margin:0 auto;display:block}
+.matches{display:grid;gap:6px;margin-top:4px}
+.match{display:grid;grid-template-columns:18px 1fr 30px 1fr;align-items:center;gap:6px;font-weight:800;font-size:.9rem}
+.match .mn{font-family:var(--display);color:var(--muted);font-size:.8rem}
+.match .mA{color:var(--teamA);text-align:right}.match .mB{color:var(--teamB)}
+.pighead.sm{width:28px;height:28px}
+.adm-match{display:grid;grid-template-columns:1fr 1fr auto 1fr 1fr;gap:4px;align-items:center}
+.adm-match select{padding:6px 4px;font-size:.85rem}
 .adminlink{display:block;text-align:center;color:var(--muted);font-size:.75rem;margin-top:18px;text-decoration:underline;background:none}
 </style>
 </head>
@@ -401,9 +408,9 @@ const DEFAULT_DAYS = [
   {id:"2026-11-07", course:"simola", teeTime:""},
   {id:"2026-11-08", course:"knysna", label:"Knysna GC (à confirmer)", teeTime:""},
   {id:"2026-11-09", course:"travel", label:"Retour à la réalité", teeTime:""},
-].map(d=>({result:"", note:"", ...d}));
+].map(d=>({result:"", note:"", matches:[], ...d}));
 const DEFAULT_CFG = {
-  teamA:{name:"Équipe A"}, teamB:{name:"Équipe B"},
+  teamA:{name:"Jambons Rouges"}, teamB:{name:"Jambons Bleus"},
   rate:2.84,
   dress:"Vol aller : polo rose Jambon « new edition », sac à dos Jambon Golf.",
   welcome:"",
@@ -435,6 +442,8 @@ function initials(p){ return (p.nick||p.name).split(/\s+/).map(w=>w[0]).join("")
 function dayTitle(d){ if(d.course==="rest") return d.label||"Pause fraîcheur"; if(d.course==="travel") return d.label||"Voyage"; const c=COURSES[d.course]; return c? c.name : (d.label||"Golf"); }
 function points(){ let a=0,b=0; for(const d of S.days){ if(d.result==="A")a++; else if(d.result==="B")b++; else if(d.result==="draw"){a+=.5;b+=.5;} } return {a,b}; }
 function mvp(){ const pts={}; S.players.forEach(p=>pts[p.id]=0); for(const d of S.days){ if(!d.result) continue; for(const p of S.players){ if(!p.team) continue; if(d.result==="draw") pts[p.id]+=.5; else if(d.result===p.team) pts[p.id]+=1; } } return S.players.slice().sort((a,b)=>pts[b.id]-pts[a.id]||a.order-b.order).map(p=>({...p,pts:pts[p.id]})); }
+function matchesHtml(d){ const ms=(d.matches||[]).filter(m=>m && (m.a||[]).some(Boolean) || (m.b||[]).some(Boolean)); if(!ms.length) return ""; const nm=id=>{const p=playerById(id); return p?esc(p.nick):"—";};
+  return `<div class="matches">${ms.map((m,i)=>`<div class="match"><span class="mn">${i+1}</span><span class="mA">${(m.a||[]).map(nm).join(" & ")}</span><span class="mv">${PIG_HEAD.replace('class="pighead"','class="pighead sm"')}</span><span class="mB">${(m.b||[]).map(nm).join(" & ")}</span></div>`).join("")}</div>`; }
 function fmtPts(n){ return Number.isInteger(n)? String(n) : n.toFixed(1).replace(".",","); }
 function blob(id){ return id; }
 function canUpload(){ return !!S.uid; }
@@ -500,6 +509,7 @@ function renderHome(){
       ${c?`<div class="row"><span class="pill">⛳ Départ ${cur.teeTime?esc(cur.teeTime):"<i>à confirmer</i>"}</span><span class="pill">🚗 ${esc(c.drive)}</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><a class="btn" href="${mapsUrl(c.maps)}" target="_blank" rel="noopener">${I.pin} Itinéraire</a><a class="btn" href="tel:${c.phone.replace(/\s/g,"")}">${I.phone} Club-house</a></div>`:""}
       ${cur.note?`<p>${esc(cur.note)}</p>`:""}
+      ${matchesHtml(cur)}
       ${photoBlock(cur)}
     </div>`;
   } else if (t > TRIP_END){
@@ -521,7 +531,7 @@ function renderHome(){
   ${(()=>{ const m=mvp(); if(!m.some(p=>p.pts>0)) return ""; const top=m.slice(0,3); return `<div class="card"><div class="eyebrow">Course au MVP</div><div class="bal">${top.map((p,i)=>`<span>${["🥇","🥈","🥉"][i]} <b>${esc(p.nick)}</b></span><span class="v num">${fmtPts(p.pts)} pt${p.pts>1?"s":""}</span>`).join("")}</div></div>`; })()}
   ${S.cfg.welcome?`<div class="notice">${esc(S.cfg.welcome)}</div>`:""}
   ${S.cfg.dress?`<div class="card"><div class="eyebrow">Dress code</div><p>${esc(S.cfg.dress)}</p></div>`:""}
-  ${next && t>=TRIP_START ? `<div class="card"><div class="eyebrow">Prochain golf</div><h3>${esc(dayTitle(next))}</h3><p class="muted">${dparts(next.id).dow} ${dparts(next.id).d} ${dparts(next.id).mon}${next.teeTime?" · départ "+esc(next.teeTime):""}</p></div>`:""}
+  ${next && t>=TRIP_START ? `<div class="card"><div class="eyebrow">Prochain golf</div><h3>${esc(dayTitle(next))}</h3><p class="muted">${dparts(next.id).dow} ${dparts(next.id).d} ${dparts(next.id).mon}${next.teeTime?" · départ "+esc(next.teeTime):""}</p>${matchesHtml(next)}</div>`:""}
   ${!S.dbReady ? `<p class="muted small" style="text-align:center">Connexion…</p>`:""}
   ${S.isOwner?"":`<button class="adminlink" id="adminLogin">Connexion organisateur</button>`}`;
   $("#p-home").innerHTML = html; bindPhotos($("#p-home"));
@@ -585,6 +595,7 @@ function renderBoard(){
     <div class="bal">${mvp().map((p,i)=>`<span>${i<3&&p.pts>0?["🥇","🥈","🥉"][i]+" ":""}<b>${esc(p.nick)}</b> <span class="muted small">${p.team?esc(S.cfg["team"+p.team].name):"sans équipe"}</span></span><span class="v num">${fmtPts(p.pts)}</span>`).join("")}</div></div>
   ${S.days.map(d=>{ const p=dparts(d.id); const golf=COURSES[d.course];
     return `<div class="card"><div class="day"><div class="d"><b>${p.d}</b><span>${p.dow}</span></div><div><b>${esc(dayTitle(d))}</b><br><span class="muted small">${golf?(d.teeTime?"Départ "+esc(d.teeTime):"Heure à confirmer"):(d.label?"":"")}${d.note?" · "+esc(d.note):""}</span></div>${golf?`<span class="res ${d.result||""}">${resLabel(d.result)||"À jouer"}</span>`:""}</div>
+    ${matchesHtml(d)}
     ${photoBlock(d,"small")}</div>`; }).join("")}`;
   bindPhotos($("#p-board"));
 }
@@ -758,7 +769,11 @@ function renderAdmin(){
     ${S.days.map(d=>{const p=dparts(d.id); return `<div class="adm-day" data-day="${d.id}"><div class="t"><b>${p.dow} ${p.d} ${p.mon}</b><select data-f="course" style="width:auto">${courseOpts(d.course)}</select></div>
       <div class="grid2"><div class="field"><label>Heure de départ</label><input data-f="teeTime" type="time" value="${esc(d.teeTime)}"></div><div class="field"><label>Libellé (pause / note)</label><input data-f="label" value="${esc(d.label||"")}" placeholder="optionnel"></div></div>
       <div class="field"><label>Note du jour (visible par tous)</label><input data-f="note" value="${esc(d.note||"")}" placeholder="ex. voiturettes réservées, départ villa 7h15"></div>
-      ${COURSES[d.course]?`<div class="seg"><button class="A" data-r="A" aria-pressed="${d.result==="A"}">${esc(c.teamA.name)}</button><button class="draw" data-r="draw" aria-pressed="${d.result==="draw"}">Égalité</button><button class="B" data-r="B" aria-pressed="${d.result==="B"}">${esc(c.teamB.name)}</button><button data-r="" aria-pressed="${!d.result}">À jouer</button></div>`:""}
+      ${COURSES[d.course]?`<div class="field"><label>Parties (2 ${esc(c.teamA.name)} contre 2 ${esc(c.teamB.name)})</label>
+        ${[0,1,2].map(i=>{ const m=(d.matches||[])[i]||{a:["",""],b:["",""]}; const opt=(team,v)=>`<option value="">—</option>`+teamOf(team).map(p=>`<option value="${p.id}" ${p.id===v?"selected":""}>${esc(p.nick)}</option>`).join("");
+          return `<div class="adm-match"><select data-m="${i}" data-side="a" data-k="0">${opt("A",m.a?.[0])}</select><select data-m="${i}" data-side="a" data-k="1">${opt("A",m.a?.[1])}</select><span class="muted small">vs</span><select data-m="${i}" data-side="b" data-k="0">${opt("B",m.b?.[0])}</select><select data-m="${i}" data-side="b" data-k="1">${opt("B",m.b?.[1])}</select></div>`; }).join("")}
+        <button class="btn sm ghost" data-shufflematches="1" style="justify-self:start">Tirer les parties au sort</button></div>
+      <div class="seg"><button class="A" data-r="A" aria-pressed="${d.result==="A"}">${esc(c.teamA.name)}</button><button class="draw" data-r="draw" aria-pressed="${d.result==="draw"}">Égalité</button><button class="B" data-r="B" aria-pressed="${d.result==="B"}">${esc(c.teamB.name)}</button><button data-r="" aria-pressed="${!d.result}">À jouer</button></div>`:""}
       ${S.photos[d.id]?`<button class="btn sm ghost" data-rmphoto="${d.id}">Retirer la photo du jour</button>`:""}
     </div>`;}).join("")}
   </div>
@@ -788,6 +803,8 @@ function renderAdmin(){
   root.querySelectorAll(".adm-day").forEach(el=>{ const d=S.days.find(x=>x.id===el.dataset.day); const ds=debounce(()=>save("days/"+d.id,{...d}),500);
     el.querySelectorAll("[data-f]").forEach(i=>i.oninput=e=>{ d[i.dataset.f]=e.target.value; if(i.dataset.f==="course"){ save("days/"+d.id,{...d}); renderAdmin(); } else ds(); });
     el.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ d.result=b.dataset.r; save("days/"+d.id,{...d}); renderAdmin(); });
+    el.querySelectorAll("select[data-m]").forEach(s=>s.onchange=()=>{ const ms=[0,1,2].map(i=>(d.matches||[])[i]||{a:["",""],b:["",""]}); const m=ms[+s.dataset.m]; m[s.dataset.side]=[...(m[s.dataset.side]||["",""])]; m[s.dataset.side][+s.dataset.k]=s.value; d.matches=ms; save("days/"+d.id,{...d}); });
+    el.querySelectorAll("[data-shufflematches]").forEach(b=>b.onclick=()=>{ const A=teamOf("A").map(p=>p.id).sort(()=>Math.random()-.5), B=teamOf("B").map(p=>p.id).sort(()=>Math.random()-.5); if(A.length<6||B.length<6) return toast("Il faut 6 joueurs par équipe"); d.matches=[0,1,2].map(i=>({a:[A[2*i],A[2*i+1]],b:[B[2*i],B[2*i+1]]})); save("days/"+d.id,{...d}); renderAdmin(); });
     el.querySelectorAll("[data-rmphoto]").forEach(b=>b.onclick=()=>confirmSheet("Retirer la photo de cette journée ?",async()=>{ await S.db.doc("photos/"+d.id).delete(); toast("Photo retirée"); })); });
   const plSave={}; root.querySelectorAll("[data-pl]").forEach(i=>i.oninput=e=>{ const p=playerById(i.dataset.pl); p[i.dataset.f]=e.target.value; (plSave[p.id]||(plSave[p.id]=debounce(()=>save("players/"+p.id,{...p}),600)))(); });
 }
