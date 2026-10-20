@@ -432,7 +432,7 @@ const VILLA = {name:"Cloud 9 Villa", estate:"Pezula Golf Estate", addr:"Welbedac
 const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, Knysna Rd, George 6530", maps:"Shop+55+Eden+Meander+Lifestyle+Centre+Knysna+Rd+George+6530"};
 
 // ---------- État ----------
-const S = { tab:"home", cfg:{...DEFAULT_CFG}, players:DEFAULT_PLAYERS.slice(), days:DEFAULT_DAYS.slice(), photos:{}, profiles:{}, expenses:[], settled:{},
+const S = { tab:"home", cfg:{...DEFAULT_CFG}, players:DEFAULT_PLAYERS.slice(), days:DEFAULT_DAYS.slice(), photos:{}, profiles:{}, expenses:[], settled:{}, admins:[], adminRequests:[],
   db:null, user:null, assets:null, wall:[], me:"", greeted:false, isOwner:false, canWrite:null, uid:null, dbReady:false };
 
 const $ = s => document.querySelector(s);
@@ -806,6 +806,10 @@ function renderAdmin(){
   const courseOpts = k => ["pezula","simola","plettenberg","goose","knysna","rest","travel"].map(v=>`<option value="${v}" ${k===v?"selected":""}>${v==="rest"?"Pause":v==="travel"?"Voyage":COURSES[v].short}</option>`).join("");
   $("#p-admin").innerHTML = `
   <div class="notice">Cette page n'existe que sur ton appli. Tout ce que tu changes ici est visible par les autres instantanément.</div>
+  <div class="card"><div class="eyebrow">Appareils organisateur</div>
+    ${(S.adminRequests||[]).length ? (S.adminRequests||[]).map(r=>`<div class="grid2" style="align-items:center"><div><b>${esc(r.device||"Appareil")}</b>${r.name?" · "+esc(r.name):""}<br><span class="muted small">demande d'accès organisateur</span></div><div class="grid2"><button class="btn primary sm" data-allow="${esc(r.id)}">Autoriser</button><button class="btn ghost sm" data-deny="${esc(r.id)}">Refuser</button></div></div>`).join("") : `<p class="muted small">Aucune demande en attente. Sur un autre appareil (ton iPhone par ex.), appuie sur « Connexion organisateur » en bas de l'accueil : la demande apparaîtra ici.</p>`}
+    ${(S.admins||[]).length?`<p class="muted small" style="margin-top:8px">${S.admins.length} appareil(s) autorisé(s)${S.admins.includes(S.uid)?"":""}. <button class="btn ghost sm" id="revokeAll" style="display:inline-block">Tout révoquer</button></p>`:""}
+  </div>
   <div class="card"><div class="eyebrow">Équipes · appuie sur un joueur pour le faire passer A → B → sans équipe</div>
     <div class="grid2"><div class="field"><label for="tA">Nom équipe A</label><input id="tA" value="${esc(c.teamA.name)}"></div><div class="field"><label for="tB">Nom équipe B</label><input id="tB" value="${esc(c.teamB.name)}"></div></div>
     <div class="chips">${ps.map(p=>`<button class="chip ${p.team}" data-team="${p.id}" aria-pressed="${p.team?"true":"false"}">${esc(p.nick)}${p.team?" · "+p.team:""}</button>`).join("")}</div>
@@ -837,6 +841,9 @@ function renderAdmin(){
   <div class="card"><div class="eyebrow">Joueurs</div>${ps.map(p=>`<div class="grid2" style="grid-template-columns:1fr 1fr 1fr;align-items:end"><div class="field"><label>Surnom</label><input data-pl="${p.id}" data-f="nick" value="${esc(p.nick)}"></div><div class="field"><label>Nom</label><input data-pl="${p.id}" data-f="name" value="${esc(p.name)}"></div><div class="field"><label>Téléphone</label><input data-pl="${p.id}" data-f="phone" value="${esc(p.phone||"")}"></div></div>`).join("")}</div>`;
 
   const root=$("#p-admin");
+  root.querySelectorAll("[data-allow]").forEach(b=>b.onclick=async()=>{ try{ await S.db.doc("config/admins").set({uids:firebase.firestore.FieldValue.arrayUnion(b.dataset.allow)},{merge:true}); await S.db.doc("adminRequests/"+b.dataset.allow).delete(); toast("Appareil autorisé"); }catch(e){ console.error(e); toast("Refusé par la base"); } });
+  root.querySelectorAll("[data-deny]").forEach(b=>b.onclick=async()=>{ try{ await S.db.doc("adminRequests/"+b.dataset.deny).delete(); }catch(e){ console.error(e); } });
+  const rv=$("#revokeAll"); if(rv) rv.onclick=()=>confirmSheet("Retirer l'accès organisateur à tous les appareils autorisés ? (ton compte Google reste organisateur)",async()=>{ await S.db.doc("config/admins").set({uids:[]}); toast("Accès révoqués"); });
   const cfgSave = debounce(()=>save("config/main",S.cfg),600);
   const setCfg=(path,v)=>{ const ks=path.split("."); let o=S.cfg; for(let i=0;i<ks.length-1;i++) o=o[ks[i]]; o[ks.at(-1)]=v; cfgSave(); };
   $("#tA").oninput=e=>setCfg("teamA.name",e.target.value); $("#tB").oninput=e=>setCfg("teamB.name",e.target.value);
@@ -864,22 +871,38 @@ renderTabs(); render();
 const FIREBASE_CONFIG = { apiKey: "AIzaSyAzrH_Ow0DeBbkAziHgMVJe3Vpfg1v51gg", authDomain: "jambon-masters.firebaseapp.com", projectId: "jambon-masters", storageBucket: "jambon-masters.firebasestorage.app", messagingSenderId: "215172939926", appId: "1:215172939926:web:960cfa852e7df78fb4c2b7" };
 const ADMIN_EMAIL = "laubertiestephane@gmail.com";
 let subsStarted=false;
+function isStandalone(){ try{ return !!(navigator.standalone || matchMedia("(display-mode: standalone)").matches); }catch(e){ return false; } }
+async function requestAdminAccess(){
+  if(!S.db || !S.uid) return toast("Pas encore connecté à la base, réessaie dans quelques secondes");
+  try{
+    await S.db.doc("adminRequests/"+S.uid).set({name:S.me||"", device:(navigator.userAgent.match(/iPhone|iPad|Android|Macintosh|Windows/)||["Appareil"])[0], ts:Date.now()});
+    sheet(`<h3>Demande envoyée !</h3><p>Ouvre l'app sur ton Mac, onglet <b>Réglages</b>, et appuie sur <b>Autoriser</b> pour cet appareil. Cette page se débloquera toute seule.</p><button class="btn primary" data-close>OK</button>`);
+  }catch(e){ console.error("request",e); toast("Demande impossible ("+(e.code||"?")+")"); }
+}
 async function adminLogin(){
   if(!window.firebase) return toast("Connexion indisponible");
+  if(isStandalone()) return requestAdminAccess();
   const auth=firebase.auth(), p=new firebase.auth.GoogleAuthProvider();
   p.setCustomParameters({prompt:"select_account", login_hint:ADMIN_EMAIL});
   try{ await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
   try{ await auth.signInWithPopup(p); }
   catch(e){ console.error("login",e);
-    if(["auth/popup-blocked","auth/operation-not-supported-in-this-environment","auth/web-storage-unsupported"].includes(e.code)){
-      try{ await auth.signInWithRedirect(p); }catch(e2){ toast("Connexion impossible ("+(e2.code||"?")+")"); }
-    } else if(e.code!=="auth/popup-closed-by-user" && e.code!=="auth/cancelled-popup-request"){ toast("Connexion impossible ("+(e.code||"?")+")"); }
+    if(e.code!=="auth/popup-closed-by-user" && e.code!=="auth/cancelled-popup-request") requestAdminAccess();
   }
+}
+let reqSubStarted=false;
+function recomputeOwner(){
+  const u=window.firebase ? firebase.auth().currentUser : null;
+  const was=S.isOwner;
+  S.isOwner = !!u && ((u.email||"").toLowerCase()===ADMIN_EMAIL || (S.admins||[]).includes(u.uid));
+  if(S.isOwner && !was){ toast("Bonjour l'organisateur !"); if(S.db){ seedIfEmpty(S.db); if(!reqSubStarted){ reqSubStarted=true; S.db.collection("adminRequests").onSnapshot(s=>{ S.adminRequests=s.docs.map(x=>({...x.data(), id:x.id})); if(S.tab==="admin") renderAdmin(); }, e=>console.warn("req",e)); } } }
+  if(S.isOwner!==was){ renderTabs(); render(); }
 }
 function startSubs(db){ if(subsStarted) return; subsStarted=true;
   const sub=(ref,fn)=>ref.onSnapshot(s=>{fn(s); S.dbReady=true; if(S.tab!=="admin") render();}, e=>console.warn("db",e));
   sub(db.doc("config/main"), s=>{ if(s.exists){ const d=s.data(); S.cfg={...DEFAULT_CFG,...d, teamA:{...DEFAULT_CFG.teamA,...(d.teamA||{})}, teamB:{...DEFAULT_CFG.teamB,...(d.teamB||{})}}; ["out1","out2","ret1","ret2"].forEach(k=>S.cfg[k]={...DEFAULT_CFG[k],...(d[k]||{})}); } });
   sub(db.doc("config/settled"), s=>{ S.settled = s.exists? {...s.data()} : {}; });
+  sub(db.doc("config/admins"), s=>{ S.admins = s.exists ? (s.data().uids||[]) : []; recomputeOwner(); });
   sub(db.collection("players"), s=>{ if(!s.empty){ S.players = s.docs.map(x=>({team:"",order:0,...x.data(), id:x.id})); } });
   sub(db.collection("days"), s=>{ if(!s.empty){ const m={}; s.docs.forEach(x=>m[x.id]={...x.data(), id:x.id}); S.days = S.days.map(d=>m[d.id]?{...d,...m[d.id]}:d); } });
   sub(db.collection("photos"), s=>{ S.photos={}; s.docs.forEach(x=>S.photos[x.id]=x.data()); });
@@ -908,9 +931,9 @@ if("serviceWorker" in navigator){ window.addEventListener("load",()=>navigator.s
     auth.getRedirectResult().catch(e=>console.warn("redirect",e));
     auth.onAuthStateChanged(u=>{
       if(!u){ auth.signInAnonymously().catch(e=>{ console.error(e); S.canWrite=false; render(); }); return; }
-      S.uid=u.uid; S.canWrite=true; S.isOwner = (u.email||"").toLowerCase()===ADMIN_EMAIL;
-      if(S.isOwner){ toast("Bonjour l'organisateur !"); seedIfEmpty(db); }
-      else if(u.email){ toast("Connecté avec "+u.email+" : ce n'est pas le compte organisateur"); }
+      S.uid=u.uid; S.canWrite=true;
+      recomputeOwner();
+      if(!S.isOwner && u.email){ toast("Connecté avec "+u.email+" : ce n'est pas le compte organisateur"); }
       renderTabs(); render();
     });
   }catch(e){ console.error(e); S.dbReady=true; render(); }
