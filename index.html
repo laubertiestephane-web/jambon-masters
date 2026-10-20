@@ -404,15 +404,15 @@ const DEFAULT_PLAYERS = [
 ].map((p,i)=>({...p, team:"", order:i}));
 const DEFAULT_DAYS = [
   {id:"2026-10-30", course:"travel", label:"Arrivée à Knysna", teeTime:""},
-  {id:"2026-10-31", course:"pezula", teeTime:""},
-  {id:"2026-11-01", course:"simola", teeTime:""},
+  {id:"2026-10-31", course:"simola", teeTime:"13h30 – 13h50"},
+  {id:"2026-11-01", course:"knysna", teeTime:"13h00, 13h08 et 13h16"},
   {id:"2026-11-02", course:"rest",   label:"Pause fraîcheur", teeTime:""},
-  {id:"2026-11-03", course:"plettenberg", teeTime:""},
-  {id:"2026-11-04", course:"goose",  teeTime:""},
+  {id:"2026-11-03", course:"plettenberg", teeTime:"12h58, 13h06 et 13h14"},
+  {id:"2026-11-04", course:"pezula", teeTime:"13h00 – 13h20"},
   {id:"2026-11-05", course:"rest",   label:"2ᵉ pause fraîcheur", teeTime:""},
-  {id:"2026-11-06", course:"pezula", teeTime:""},
-  {id:"2026-11-07", course:"simola", teeTime:""},
-  {id:"2026-11-08", course:"knysna", label:"Knysna GC (à confirmer)", teeTime:""},
+  {id:"2026-11-06", course:"simola", teeTime:"13h30 – 13h50"},
+  {id:"2026-11-07", course:"goose",  teeTime:"12h30, 12h40 et 12h50"},
+  {id:"2026-11-08", course:"pezula", teeTime:"13h30 – 13h50"},
   {id:"2026-11-09", course:"travel", label:"Retour à la réalité", teeTime:""},
 ].map(d=>({result:"", note:"", matches:[], ...d}));
 const DEFAULT_CFG = {
@@ -429,6 +429,7 @@ const DEFAULT_CFG = {
   villaNotes:"9 nuits · ménage quotidien inclus · Thomas V. nous rejoint à Joburg pour le vol vers George."
 };
 const VILLA = {name:"Cloud 9 Villa", estate:"Pezula Golf Estate", addr:"Welbedacht Lane, Rexford, Knysna 6571", phone:"+27 83 459 4540", maps:"Cloud+9+Estate+Welbedacht+Lane+Rexford+Knysna"};
+const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, Knysna Rd, George 6530", maps:"Shop+55+Eden+Meander+Lifestyle+Centre+Knysna+Rd+George+6530"};
 
 // ---------- État ----------
 const S = { tab:"home", cfg:{...DEFAULT_CFG}, players:DEFAULT_PLAYERS.slice(), days:DEFAULT_DAYS.slice(), photos:{}, profiles:{}, expenses:[], settled:{},
@@ -599,6 +600,11 @@ function renderTrip(){
     <p>${esc(c.villaArrival)}</p>
     <p class="muted small">${esc(c.villaNotes)}</p>
     <div class="grid2"><a class="btn primary" href="${mapsUrl(VILLA.maps)}" target="_blank" rel="noopener">${I.pin} Google Maps</a><a class="btn" href="tel:${VILLA.phone.replace(/\s/g,"")}">${I.phone} ${VILLA.phone}</a></div>
+  </div>
+  <div class="card"><div class="eyebrow">Pro Shop · George</div>
+    <h3>${PROSHOP.name}</h3>
+    <p>${PROSHOP.addr}</p>
+    <a class="btn primary" href="${mapsUrl(PROSHOP.maps)}" target="_blank" rel="noopener">${I.pin} Google Maps</a>
   </div>`;
 }
 
@@ -807,7 +813,7 @@ function renderAdmin(){
   </div>
   <div class="card"><div class="eyebrow">Journées · parcours, heure de départ, résultat</div>
     ${S.days.map(d=>{const p=dparts(d.id); return `<div class="adm-day" data-day="${d.id}"><div class="t"><b>${p.dow} ${p.d} ${p.mon}</b><select data-f="course" style="width:auto">${courseOpts(d.course)}</select></div>
-      <div class="grid2"><div class="field"><label>Heure de départ</label><input data-f="teeTime" type="time" value="${esc(d.teeTime)}"></div><div class="field"><label>Libellé (pause / note)</label><input data-f="label" value="${esc(d.label||"")}" placeholder="optionnel"></div></div>
+      <div class="grid2"><div class="field"><label>Heure de départ</label><input data-f="teeTime" type="text" value="${esc(d.teeTime)}" placeholder="ex. 13h30 – 13h50"></div><div class="field"><label>Libellé (pause / note)</label><input data-f="label" value="${esc(d.label||"")}" placeholder="optionnel"></div></div>
       <div class="field"><label>Note du jour (visible par tous)</label><input data-f="note" value="${esc(d.note||"")}" placeholder="ex. voiturettes réservées, départ villa 7h15"></div>
       ${COURSES[d.course]?`<div class="field"><label>Parties (2 ${esc(c.teamA.name)} contre 2 ${esc(c.teamB.name)})</label>
         ${[0,1,2].map(i=>{ const m=(d.matches||[])[i]||{a:["",""],b:["",""]}; const opt=(team,v)=>`<option value="">—</option>`+teamOf(team).map(p=>`<option value="${p.id}" ${p.id===v?"selected":""}>${esc(p.nick)}</option>`).join("");
