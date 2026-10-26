@@ -418,6 +418,8 @@ const DEFAULT_DAYS = [
 const DEFAULT_CFG = {
   teamA:{name:"Jambons Rouges"}, teamB:{name:"Jambons Bleus"},
   rate:2.84,
+  format:"Tournoi Team Matchplay (Squabbit) : chaque journée, 3 parties de 4 joueurs, 2 Rouges contre 2 Bleus, 18 trous en Best Balls. L'équipe qui remporte la journée marque 1 point (½ en cas d'égalité), cumulé sur la semaine. Les scores trou par trou, le Stableford individuel et le Strokeplay sont suivis sur Squabbit.",
+  squabbit:"https://app.squabbitgolf.com/tournament?inviteCode=HUYWUC",
   dress:"Vol aller : polo rose Jambon « new edition », sac à dos Jambon Golf.",
   welcome:"",
   out1:{no:"MK851", from:"Maurice (MRU)", to:"Johannesburg (JNB)", dep:"08:50", arr:"11:25", date:"ven 30 oct", note:"Air Mauritius · golf bag inclus"},
@@ -429,10 +431,9 @@ const DEFAULT_CFG = {
   villaNotes:"9 nuits · ménage quotidien inclus · Thomas V. nous rejoint à Joburg pour le vol vers George."
 };
 const VILLA = {name:"Cloud 9 Villa", estate:"Pezula Golf Estate", addr:"Welbedacht Lane, Rexford, Knysna 6571", phone:"+27 83 459 4540", maps:"Cloud+9+Estate+Welbedacht+Lane+Rexford+Knysna"};
-const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, Knysna Rd, George 6530", maps:"Shop+55+Eden+Meander+Lifestyle+Centre+Knysna+Rd+George+6530"};
 
 // ---------- État ----------
-const S = { tab:"home", cfg:{...DEFAULT_CFG}, players:DEFAULT_PLAYERS.slice(), days:DEFAULT_DAYS.slice(), photos:{}, profiles:{}, expenses:[], settled:{}, admins:[], adminRequests:[],
+const S = { tab:"home", cfg:{...DEFAULT_CFG}, players:DEFAULT_PLAYERS.slice(), days:DEFAULT_DAYS.slice(), photos:{}, profiles:{}, expenses:[], settled:{},
   db:null, user:null, assets:null, wall:[], me:"", greeted:false, isOwner:false, canWrite:null, uid:null, dbReady:false };
 
 const $ = s => document.querySelector(s);
@@ -551,6 +552,7 @@ function renderHome(){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><a class="btn" href="${mapsUrl(c.maps)}" target="_blank" rel="noopener">${I.pin} Itinéraire</a><a class="btn" href="tel:${c.phone.replace(/\s/g,"")}">${I.phone} Club-house</a></div>`:""}
       ${cur.note?`<p>${esc(cur.note)}</p>`:""}
       ${matchesHtml(cur)}
+      ${S.cfg.squabbit?`<a class="btn ghost" href="${esc(S.cfg.squabbit)}" target="_blank" rel="noopener">🐰 Scores du jour sur Squabbit</a>`:""}
       ${photoBlock(cur)}
     </div>`;
   } else if (t > TRIP_END){
@@ -600,11 +602,6 @@ function renderTrip(){
     <p>${esc(c.villaArrival)}</p>
     <p class="muted small">${esc(c.villaNotes)}</p>
     <div class="grid2"><a class="btn primary" href="${mapsUrl(VILLA.maps)}" target="_blank" rel="noopener">${I.pin} Google Maps</a><a class="btn" href="tel:${VILLA.phone.replace(/\s/g,"")}">${I.phone} ${VILLA.phone}</a></div>
-  </div>
-  <div class="card"><div class="eyebrow">Pro Shop · George</div>
-    <h3>${PROSHOP.name}</h3>
-    <p>${PROSHOP.addr}</p>
-    <a class="btn primary" href="${mapsUrl(PROSHOP.maps)}" target="_blank" rel="noopener">${I.pin} Google Maps</a>
   </div>`;
 }
 
@@ -637,6 +634,7 @@ function renderBoard(){
     <div class="card" style="border-top:4px solid var(--teamA)"><b>${esc(S.cfg.teamA.name)}</b>${A.length?A.map(p=>`<div>${esc(p.nick)} <span class="muted small">${esc(p.name)}</span></div>`).join(""):'<span class="muted small">Tirage au sort au lounge</span>'}</div>
     <div class="card" style="border-top:4px solid var(--teamB)"><b>${esc(S.cfg.teamB.name)}</b>${B.length?B.map(p=>`<div>${esc(p.nick)} <span class="muted small">${esc(p.name)}</span></div>`).join(""):'<span class="muted small">Tirage au sort au lounge</span>'}</div>
   </div>
+  ${S.cfg.format?`<div class="card"><div class="eyebrow">Formule de jeu</div><p>${esc(S.cfg.format)}</p>${S.cfg.squabbit?`<a class="btn ghost" href="${esc(S.cfg.squabbit)}" target="_blank" rel="noopener">🐰 Ouvrir le tournoi sur Squabbit</a>`:""}</div>`:""}
   <div class="card"><div class="eyebrow">Course au MVP</div>
     <div class="bal">${mvp().map((p,i)=>`<span>${i<3&&p.pts>0?["🥇","🥈","🥉"][i]+" ":""}<b>${esc(p.nick)}</b> <span class="muted small">${p.team?esc(S.cfg["team"+p.team].name):"sans équipe"}</span></span><span class="v num">${fmtPts(p.pts)}</span>`).join("")}</div></div>
   ${S.days.map(d=>{ const p=dparts(d.id); const golf=COURSES[d.course];
@@ -806,10 +804,6 @@ function renderAdmin(){
   const courseOpts = k => ["pezula","simola","plettenberg","goose","knysna","rest","travel"].map(v=>`<option value="${v}" ${k===v?"selected":""}>${v==="rest"?"Pause":v==="travel"?"Voyage":COURSES[v].short}</option>`).join("");
   $("#p-admin").innerHTML = `
   <div class="notice">Cette page n'existe que sur ton appli. Tout ce que tu changes ici est visible par les autres instantanément.</div>
-  <div class="card"><div class="eyebrow">Appareils organisateur</div>
-    ${(S.adminRequests||[]).length ? (S.adminRequests||[]).map(r=>`<div class="grid2" style="align-items:center"><div><b>${esc(r.device||"Appareil")}</b>${r.name?" · "+esc(r.name):""}<br><span class="muted small">demande d'accès organisateur</span></div><div class="grid2"><button class="btn primary sm" data-allow="${esc(r.id)}">Autoriser</button><button class="btn ghost sm" data-deny="${esc(r.id)}">Refuser</button></div></div>`).join("") : `<p class="muted small">Aucune demande en attente. Sur un autre appareil (ton iPhone par ex.), appuie sur « Connexion organisateur » en bas de l'accueil : la demande apparaîtra ici.</p>`}
-    ${(S.admins||[]).length?`<p class="muted small" style="margin-top:8px">${S.admins.length} appareil(s) autorisé(s)${S.admins.includes(S.uid)?"":""}. <button class="btn ghost sm" id="revokeAll" style="display:inline-block">Tout révoquer</button></p>`:""}
-  </div>
   <div class="card"><div class="eyebrow">Équipes · appuie sur un joueur pour le faire passer A → B → sans équipe</div>
     <div class="grid2"><div class="field"><label for="tA">Nom équipe A</label><input id="tA" value="${esc(c.teamA.name)}"></div><div class="field"><label for="tB">Nom équipe B</label><input id="tB" value="${esc(c.teamB.name)}"></div></div>
     <div class="chips">${ps.map(p=>`<button class="chip ${p.team}" data-team="${p.id}" aria-pressed="${p.team?"true":"false"}">${esc(p.nick)}${p.team?" · "+p.team:""}</button>`).join("")}</div>
@@ -817,7 +811,7 @@ function renderAdmin(){
   </div>
   <div class="card"><div class="eyebrow">Journées · parcours, heure de départ, résultat</div>
     ${S.days.map(d=>{const p=dparts(d.id); return `<div class="adm-day" data-day="${d.id}"><div class="t"><b>${p.dow} ${p.d} ${p.mon}</b><select data-f="course" style="width:auto">${courseOpts(d.course)}</select></div>
-      <div class="grid2"><div class="field"><label>Heure de départ</label><input data-f="teeTime" type="text" value="${esc(d.teeTime)}" placeholder="ex. 13h30 – 13h50"></div><div class="field"><label>Libellé (pause / note)</label><input data-f="label" value="${esc(d.label||"")}" placeholder="optionnel"></div></div>
+      <div class="grid2"><div class="field"><label>Heure de départ</label><input data-f="teeTime" type="time" value="${esc(d.teeTime)}"></div><div class="field"><label>Libellé (pause / note)</label><input data-f="label" value="${esc(d.label||"")}" placeholder="optionnel"></div></div>
       <div class="field"><label>Note du jour (visible par tous)</label><input data-f="note" value="${esc(d.note||"")}" placeholder="ex. voiturettes réservées, départ villa 7h15"></div>
       ${COURSES[d.course]?`<div class="field"><label>Parties (2 ${esc(c.teamA.name)} contre 2 ${esc(c.teamB.name)})</label>
         ${[0,1,2].map(i=>{ const m=(d.matches||[])[i]||{a:["",""],b:["",""]}; const opt=(team,v)=>`<option value="">—</option>`+teamOf(team).map(p=>`<option value="${p.id}" ${p.id===v?"selected":""}>${esc(p.nick)}</option>`).join("");
@@ -836,18 +830,17 @@ function renderAdmin(){
     <div class="field"><label for="villaNotes">Notes villa</label><input id="villaNotes" value="${esc(c.villaNotes)}"></div>
     <div class="field"><label for="dress">Dress code (accueil)</label><input id="dress" value="${esc(c.dress)}"></div>
     <div class="field"><label for="welcome">Message du jour (accueil, laisser vide pour masquer)</label><textarea id="welcome" rows="2">${esc(c.welcome||"")}</textarea></div>
+    <div class="field"><label for="format">Formule de jeu (affichée dans Classement)</label><textarea id="format" rows="4">${esc(c.format||"")}</textarea></div>
+    <div class="field"><label for="squabbit">Lien du tournoi Squabbit</label><input id="squabbit" value="${esc(c.squabbit||"")}"></div>
     <div class="field"><label for="rate">Taux de change : 1 rand = … roupies</label><input id="rate" type="number" step="0.01" value="${c.rate}"></div>
   </div>
   <div class="card"><div class="eyebrow">Joueurs</div>${ps.map(p=>`<div class="grid2" style="grid-template-columns:1fr 1fr 1fr;align-items:end"><div class="field"><label>Surnom</label><input data-pl="${p.id}" data-f="nick" value="${esc(p.nick)}"></div><div class="field"><label>Nom</label><input data-pl="${p.id}" data-f="name" value="${esc(p.name)}"></div><div class="field"><label>Téléphone</label><input data-pl="${p.id}" data-f="phone" value="${esc(p.phone||"")}"></div></div>`).join("")}</div>`;
 
   const root=$("#p-admin");
-  root.querySelectorAll("[data-allow]").forEach(b=>b.onclick=async()=>{ try{ await S.db.doc("config/admins").set({uids:firebase.firestore.FieldValue.arrayUnion(b.dataset.allow)},{merge:true}); await S.db.doc("adminRequests/"+b.dataset.allow).delete(); toast("Appareil autorisé"); }catch(e){ console.error(e); toast("Refusé par la base"); } });
-  root.querySelectorAll("[data-deny]").forEach(b=>b.onclick=async()=>{ try{ await S.db.doc("adminRequests/"+b.dataset.deny).delete(); }catch(e){ console.error(e); } });
-  const rv=$("#revokeAll"); if(rv) rv.onclick=()=>confirmSheet("Retirer l'accès organisateur à tous les appareils autorisés ? (ton compte Google reste organisateur)",async()=>{ await S.db.doc("config/admins").set({uids:[]}); toast("Accès révoqués"); });
   const cfgSave = debounce(()=>save("config/main",S.cfg),600);
   const setCfg=(path,v)=>{ const ks=path.split("."); let o=S.cfg; for(let i=0;i<ks.length-1;i++) o=o[ks[i]]; o[ks.at(-1)]=v; cfgSave(); };
   $("#tA").oninput=e=>setCfg("teamA.name",e.target.value); $("#tB").oninput=e=>setCfg("teamB.name",e.target.value);
-  ["shuttle","villaArrival","villaNotes","dress","welcome"].forEach(id=>$("#"+id).oninput=e=>setCfg(id,e.target.value));
+  ["shuttle","villaArrival","villaNotes","dress","welcome","format","squabbit"].forEach(id=>$("#"+id).oninput=e=>setCfg(id,e.target.value));
   $("#rate").oninput=e=>{ const v=parseFloat(e.target.value); if(v>0) setCfg("rate",v); };
   root.querySelectorAll("[data-fl]").forEach(i=>i.oninput=e=>setCfg(i.dataset.fl+"."+i.dataset.f,e.target.value));
   root.querySelectorAll("[data-team]").forEach(b=>b.onclick=()=>{ const p=playerById(b.dataset.team); const n=p.team===""?"A":p.team==="A"?"B":""; p.team=n; save("players/"+p.id,{...p}); renderAdmin(); });
@@ -871,38 +864,11 @@ renderTabs(); render();
 const FIREBASE_CONFIG = { apiKey: "AIzaSyAzrH_Ow0DeBbkAziHgMVJe3Vpfg1v51gg", authDomain: "jambon-masters.firebaseapp.com", projectId: "jambon-masters", storageBucket: "jambon-masters.firebasestorage.app", messagingSenderId: "215172939926", appId: "1:215172939926:web:960cfa852e7df78fb4c2b7" };
 const ADMIN_EMAIL = "laubertiestephane@gmail.com";
 let subsStarted=false;
-function isStandalone(){ try{ return !!(navigator.standalone || matchMedia("(display-mode: standalone)").matches); }catch(e){ return false; } }
-async function requestAdminAccess(){
-  if(!S.db || !S.uid) return toast("Pas encore connecté à la base, réessaie dans quelques secondes");
-  try{
-    await S.db.doc("adminRequests/"+S.uid).set({name:S.me||"", device:(navigator.userAgent.match(/iPhone|iPad|Android|Macintosh|Windows/)||["Appareil"])[0], ts:Date.now()});
-    sheet(`<h3>Demande envoyée !</h3><p>Ouvre l'app sur ton Mac, onglet <b>Réglages</b>, et appuie sur <b>Autoriser</b> pour cet appareil. Cette page se débloquera toute seule.</p><button class="btn primary" data-close>OK</button>`);
-  }catch(e){ console.error("request",e); toast("Demande impossible ("+(e.code||"?")+")"); }
-}
-async function adminLogin(){
-  if(!window.firebase) return toast("Connexion indisponible");
-  if(isStandalone()) return requestAdminAccess();
-  const auth=firebase.auth(), p=new firebase.auth.GoogleAuthProvider();
-  p.setCustomParameters({prompt:"select_account", login_hint:ADMIN_EMAIL});
-  try{ await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
-  try{ await auth.signInWithPopup(p); }
-  catch(e){ console.error("login",e);
-    if(e.code!=="auth/popup-closed-by-user" && e.code!=="auth/cancelled-popup-request") requestAdminAccess();
-  }
-}
-let reqSubStarted=false;
-function recomputeOwner(){
-  const u=window.firebase ? firebase.auth().currentUser : null;
-  const was=S.isOwner;
-  S.isOwner = !!u && ((u.email||"").toLowerCase()===ADMIN_EMAIL || (S.admins||[]).includes(u.uid));
-  if(S.isOwner && !was){ toast("Bonjour l'organisateur !"); if(S.db){ seedIfEmpty(S.db); if(!reqSubStarted){ reqSubStarted=true; S.db.collection("adminRequests").onSnapshot(s=>{ S.adminRequests=s.docs.map(x=>({...x.data(), id:x.id})); if(S.tab==="admin") renderAdmin(); }, e=>console.warn("req",e)); } } }
-  if(S.isOwner!==was){ renderTabs(); render(); }
-}
+function adminLogin(){ if(!window.firebase) return toast("Connexion indisponible"); const p=new firebase.auth.GoogleAuthProvider(); firebase.auth().signInWithRedirect(p).catch(e=>{ console.error(e); toast("Connexion impossible"); }); }
 function startSubs(db){ if(subsStarted) return; subsStarted=true;
   const sub=(ref,fn)=>ref.onSnapshot(s=>{fn(s); S.dbReady=true; if(S.tab!=="admin") render();}, e=>console.warn("db",e));
   sub(db.doc("config/main"), s=>{ if(s.exists){ const d=s.data(); S.cfg={...DEFAULT_CFG,...d, teamA:{...DEFAULT_CFG.teamA,...(d.teamA||{})}, teamB:{...DEFAULT_CFG.teamB,...(d.teamB||{})}}; ["out1","out2","ret1","ret2"].forEach(k=>S.cfg[k]={...DEFAULT_CFG[k],...(d[k]||{})}); } });
   sub(db.doc("config/settled"), s=>{ S.settled = s.exists? {...s.data()} : {}; });
-  sub(db.doc("config/admins"), s=>{ S.admins = s.exists ? (s.data().uids||[]) : []; recomputeOwner(); });
   sub(db.collection("players"), s=>{ if(!s.empty){ S.players = s.docs.map(x=>({team:"",order:0,...x.data(), id:x.id})); } });
   sub(db.collection("days"), s=>{ if(!s.empty){ const m={}; s.docs.forEach(x=>m[x.id]={...x.data(), id:x.id}); S.days = S.days.map(d=>m[d.id]?{...d,...m[d.id]}:d); } });
   sub(db.collection("photos"), s=>{ S.photos={}; s.docs.forEach(x=>S.photos[x.id]=x.data()); });
@@ -931,9 +897,8 @@ if("serviceWorker" in navigator){ window.addEventListener("load",()=>navigator.s
     auth.getRedirectResult().catch(e=>console.warn("redirect",e));
     auth.onAuthStateChanged(u=>{
       if(!u){ auth.signInAnonymously().catch(e=>{ console.error(e); S.canWrite=false; render(); }); return; }
-      S.uid=u.uid; S.canWrite=true;
-      recomputeOwner();
-      if(!S.isOwner && u.email){ toast("Connecté avec "+u.email+" : ce n'est pas le compte organisateur"); }
+      S.uid=u.uid; S.canWrite=true; S.isOwner = (u.email||"").toLowerCase()===ADMIN_EMAIL;
+      if(S.isOwner){ toast("Bonjour l'organisateur !"); seedIfEmpty(db); }
       renderTabs(); render();
     });
   }catch(e){ console.error(e); S.dbReady=true; render(); }
