@@ -435,7 +435,7 @@ const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, 
 
 // ---------- État ----------
 const S = { tab:"home", cfg:{...DEFAULT_CFG}, players:DEFAULT_PLAYERS.slice(), days:DEFAULT_DAYS.slice(), photos:{}, profiles:{}, expenses:[], settled:{}, admins:[], adminRequests:[],
-  db:null, user:null, assets:null, wall:[], me:"", greeted:false, isOwner:false, canWrite:null, uid:null, dbReady:false };
+  db:null, user:null, assets:null, wall:[], fx:{rate:2.84, live:false, date:"", mur:"", zar:""}, me:"", greeted:false, isOwner:false, canWrite:null, uid:null, dbReady:false };
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -583,7 +583,11 @@ function renderHome(){
 }
 
 function flightRow(f){ return `<div class="flight"><span class="t num">${esc(f.dep)} → ${esc(f.arr)}</span><div><span class="cities">${esc(f.from)} → ${esc(f.to)}</span><br><span class="muted small">${f.no?esc(f.no)+" · ":"<i>n° de vol à confirmer</i> · "}${esc(f.date)}${f.note?" · "+esc(f.note):""}</span></div></div>`; }
-function renderTrip(){
+function bindFx(){ const m=$("#fxMur"), z=$("#fxZar"); if(!m||!z) return; const r=S.fx.rate;
+  m.oninput=()=>{ const v=parseFloat(m.value); S.fx.mur=m.value; if(isNaN(v)){ z.value=""; S.fx.zar=""; return; } z.value=(v/r).toFixed(0); S.fx.zar=z.value; };
+  z.oninput=()=>{ const v=parseFloat(z.value); S.fx.zar=z.value; if(isNaN(v)){ m.value=""; S.fx.mur=""; return; } m.value=(v*r).toFixed(0); S.fx.mur=m.value; }; }
+async function loadFx(){ try{ const r=await fetch("https://open.er-api.com/v6/latest/ZAR",{cache:"no-store"}); const j=await r.json(); if(j && j.result==="success" && j.rates && j.rates.MUR>0){ S.fx.rate=j.rates.MUR; S.fx.live=true; S.fx.date=new Date(j.time_last_update_unix*1000).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}); if(S.tab==="trip") render(); } }catch(e){} }
+function renderTrip(){ queueMicrotask(bindFx);
   const c=S.cfg;
   $("#p-trip").innerHTML = `
   <div class="card"><div class="eyebrow">Aller · vendredi 30 octobre</div>${flightRow(c.out1)}${flightRow(c.out2)}
@@ -596,6 +600,14 @@ function renderTrip(){
       <li><b>Golf bag</b> inclus sur les deux compagnies. FlySafair : 1 bagage en soute + 1 bagage spécial.</li>
       <li>Dress code vol aller : polo rose Jambon, sac à dos Jambon Golf, lunettes roses.</li>
     </ul></div>
+  <div class="card"><div class="eyebrow">Convertisseur Rs ⇄ Rand</div>
+    <div class="grid2" style="grid-template-columns:1fr auto 1fr;align-items:end">
+      <div class="field"><label for="fxMur">Roupies (Rs)</label><input id="fxMur" type="number" inputmode="decimal" placeholder="1000" value="${S.fx.mur||""}"></div>
+      <span style="font-family:var(--display);font-size:1.3rem;color:var(--muted);padding-bottom:10px">⇄</span>
+      <div class="field"><label for="fxZar">Rands (R)</label><input id="fxZar" type="number" inputmode="decimal" placeholder="352" value="${S.fx.zar||""}"></div>
+    </div>
+    <p class="muted small num">1 R = ${S.fx.rate.toFixed(3)} Rs · 100 Rs = ${(100/S.fx.rate).toFixed(1)} R · ${S.fx.live?"taux du jour ("+esc(S.fx.date)+")":"taux de l'app ("+S.fx.rate+")"}</p>
+  </div>
   <div class="card"><div class="eyebrow">Navette depuis Maurice</div><p>${esc(c.shuttle)}</p></div>
   <div class="card"><div class="eyebrow">La villa · 9 nuits</div>
     <h3>${VILLA.name} · ${VILLA.estate}</h3>
@@ -907,6 +919,7 @@ function recomputeOwner(){
 function startSubs(db){ if(subsStarted) return; subsStarted=true;
   const sub=(ref,fn)=>ref.onSnapshot(s=>{fn(s); S.dbReady=true; if(S.tab!=="admin") render();}, e=>console.warn("db",e));
   sub(db.doc("config/main"), s=>{ if(s.exists){ const d=s.data(); S.cfg={...DEFAULT_CFG,...d, teamA:{...DEFAULT_CFG.teamA,...(d.teamA||{})}, teamB:{...DEFAULT_CFG.teamB,...(d.teamB||{})}}; ["out1","out2","ret1","ret2"].forEach(k=>S.cfg[k]={...DEFAULT_CFG[k],...(d[k]||{})}); } });
+  sub(db.doc("config/main"), s=>{ if(!S.fx.live && S.cfg.rate>0) S.fx.rate=S.cfg.rate; });
   sub(db.doc("config/settled"), s=>{ S.settled = s.exists? {...s.data()} : {}; });
   sub(db.doc("config/admins"), s=>{ S.admins = s.exists ? (s.data().uids||[]) : []; recomputeOwner(); });
   sub(db.collection("players"), s=>{ if(!s.empty){ S.players = s.docs.map(x=>({team:"",order:0,...x.data(), id:x.id})); } });
@@ -926,11 +939,12 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261026-144103";
+const BUILD="20261028-205609";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
 setTimeout(checkUpdate, 4000);
+loadFx();
 if("serviceWorker" in navigator){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{})); }
 (function boot(){
   if(!window.firebase){ S.dbReady=true; render(); return; }
