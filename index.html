@@ -491,7 +491,8 @@ function playerById(id){ return S.players.find(p=>p.id===id); }
 function teamOf(t){ return S.players.filter(p=>p.team===t).sort((a,b)=>a.order-b.order); }
 function initials(p){ return (p.nick||p.name).split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase(); }
 function dayTitle(d){ if(d.course==="rest") return d.label||"Pause fraîcheur"; if(d.course==="travel") return d.label||"Voyage"; const c=COURSES[d.course]; return c? c.name : (d.label||"Golf"); }
-function liveSummary(d){ const ms=(d.matches||[]).filter(m=>m && ((m.a||[]).some(Boolean)||(m.b||[]).some(Boolean))); if(!ms.length) return null;
+function validMatches(d){ return (d.matches||[]).filter(m=>m && ((m.a||[]).some(Boolean)||(m.b||[]).some(Boolean)) && [...(m.a||[])].filter(Boolean).every(id=>playerById(id)?.team==="A") && [...(m.b||[])].filter(Boolean).every(id=>playerById(id)?.team==="B")); }
+function liveSummary(d){ const ms=validMatches(d); if(!ms.length) return null;
   const L=S.live[d.id]; if(!L||!L.m) return null; let a=0,b=0,closed=0,started=0;
   ms.forEach((m,i)=>{ const st=matchState((L.m[i]&&L.m[i].holes)||[]); if(st.played) started++; if(st.closed){ closed++; if(st.winner==="A")a++; else if(st.winner==="B")b++; else {a+=.5;b+=.5;} } });
   return {a,b,closed,started,total:ms.length,done:closed===ms.length}; }
@@ -814,7 +815,7 @@ function renderLive(){
   const gd=golfDays(); if(!S.liveDay || !gd.some(d=>d.id===S.liveDay)) S.liveDay=defaultLiveDay();
   const d=S.days.find(x=>x.id===S.liveDay); const can=!!S.uid && !!S.db;
   if(!d){ $("#p-live").innerHTML=`<div class="card"><p class="muted">Aucune journée de golf.</p></div>`; return; }
-  const matches=(d.matches||[]).filter(m=>m && ((m.a||[]).some(Boolean)||(m.b||[]).some(Boolean)));
+  const matches=validMatches(d);
   const L=liveFor(d.id);
   let ptsA=0, ptsB=0, projA=0, projB=0;
   const rows = matches.map((m,i)=>{ const st=matchState(L.m[i].holes||[]);
@@ -992,8 +993,9 @@ function renderAdmin(){
   $("#rate").oninput=e=>{ const v=parseFloat(e.target.value); if(v>0) setCfg("rate",v); };
   root.querySelectorAll("[data-fl]").forEach(i=>i.oninput=e=>setCfg(i.dataset.fl+"."+i.dataset.f,e.target.value));
   root.querySelectorAll("[data-team]").forEach(b=>b.onclick=()=>{ const p=playerById(b.dataset.team); const n=p.team===""?"A":p.team==="A"?"B":""; p.team=n; save("players/"+p.id,{...p}); renderAdmin(); });
-  $("#shuffle").onclick=()=>confirmSheet("Tirer les équipes au sort (6 / 6) ?",async()=>{ const ids=ps.map(p=>p.id).sort(()=>Math.random()-.5); for(const p of ps){ p.team = ids.indexOf(p.id)<6?"A":"B"; await save("players/"+p.id,{...p}); } renderAdmin(); });
-  $("#clearTeams").onclick=()=>confirmSheet("Vider les deux équipes ?",async()=>{ for(const p of ps){ p.team=""; await save("players/"+p.id,{...p}); } renderAdmin(); });
+  async function clearMatchesAndLive(){ for(const d of S.days){ if((d.matches||[]).length){ d.matches=[]; await save("days/"+d.id,{...d}); } if(S.live[d.id]){ try{ await S.db.doc("live/"+d.id).delete(); }catch(e){} } } }
+  $("#shuffle").onclick=()=>confirmSheet("Tirer les équipes au sort (6 / 6) ? Les parties et les scores Live seront remis à zéro.",async()=>{ const ids=ps.map(p=>p.id).sort(()=>Math.random()-.5); for(const p of ps){ p.team = ids.indexOf(p.id)<6?"A":"B"; await save("players/"+p.id,{...p}); } await clearMatchesAndLive(); renderAdmin(); });
+  $("#clearTeams").onclick=()=>confirmSheet("Vider les deux équipes ? Les parties et les scores Live seront aussi effacés.",async()=>{ for(const p of ps){ p.team=""; await save("players/"+p.id,{...p}); } await clearMatchesAndLive(); renderAdmin(); });
   root.querySelectorAll(".adm-day").forEach(el=>{ const d=S.days.find(x=>x.id===el.dataset.day); const ds=debounce(()=>save("days/"+d.id,{...d}),500);
     el.querySelectorAll("[data-f]").forEach(i=>i.oninput=e=>{ d[i.dataset.f]=e.target.value; if(i.dataset.f==="course"){ save("days/"+d.id,{...d}); renderAdmin(); } else ds(); });
     el.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ d.result=b.dataset.r; save("days/"+d.id,{...d}); renderAdmin(); });
@@ -1063,7 +1065,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261028-214248";
+const BUILD="20261028-214647";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
