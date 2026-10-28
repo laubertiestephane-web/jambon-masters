@@ -491,8 +491,13 @@ function playerById(id){ return S.players.find(p=>p.id===id); }
 function teamOf(t){ return S.players.filter(p=>p.team===t).sort((a,b)=>a.order-b.order); }
 function initials(p){ return (p.nick||p.name).split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase(); }
 function dayTitle(d){ if(d.course==="rest") return d.label||"Pause fraîcheur"; if(d.course==="travel") return d.label||"Voyage"; const c=COURSES[d.course]; return c? c.name : (d.label||"Golf"); }
-function points(){ let a=0,b=0; for(const d of S.days){ if(d.result==="A")a++; else if(d.result==="B")b++; else if(d.result==="draw"){a+=.5;b+=.5;} } return {a,b}; }
-function mvp(){ const pts={}; S.players.forEach(p=>pts[p.id]=0); for(const d of S.days){ if(!d.result) continue; for(const p of S.players){ if(!p.team) continue; if(d.result==="draw") pts[p.id]+=.5; else if(d.result===p.team) pts[p.id]+=1; } } return S.players.slice().sort((a,b)=>pts[b.id]-pts[a.id]||a.order-b.order).map(p=>({...p,pts:pts[p.id]})); }
+function liveSummary(d){ const ms=(d.matches||[]).filter(m=>m && ((m.a||[]).some(Boolean)||(m.b||[]).some(Boolean))); if(!ms.length) return null;
+  const L=S.live[d.id]; if(!L||!L.m) return null; let a=0,b=0,closed=0,started=0;
+  ms.forEach((m,i)=>{ const st=matchState((L.m[i]&&L.m[i].holes)||[]); if(st.played) started++; if(st.closed){ closed++; if(st.winner==="A")a++; else if(st.winner==="B")b++; else {a+=.5;b+=.5;} } });
+  return {a,b,closed,started,total:ms.length,done:closed===ms.length}; }
+function effResult(d){ if(d.result) return d.result; const s=liveSummary(d); if(s && s.done){ return s.a>s.b?"A":s.b>s.a?"B":"draw"; } return ""; }
+function points(){ let a=0,b=0; for(const d of S.days){ const r=effResult(d); if(r==="A")a++; else if(r==="B")b++; else if(r==="draw"){a+=.5;b+=.5;} } return {a,b}; }
+function mvp(){ const pts={}; S.players.forEach(p=>pts[p.id]=0); for(const d of S.days){ const r=effResult(d); if(!r) continue; for(const p of S.players){ if(!p.team) continue; if(r==="draw") pts[p.id]+=.5; else if(r===p.team) pts[p.id]+=1; } } return S.players.slice().sort((a,b)=>pts[b.id]-pts[a.id]||a.order-b.order).map(p=>({...p,pts:pts[p.id]})); }
 // Tirage des parties : on cherche la combinaison où chacun retrouve le moins possible
 // de joueurs (partenaires ou adversaires) déjà croisés les autres jours.
 function smartDraw(dayId){
@@ -707,7 +712,7 @@ function renderBoard(){
   <div class="card"><div class="eyebrow">Course au MVP</div>
     <div class="bal">${mvp().map((p,i)=>`<span>${i<3&&p.pts>0?["🥇","🥈","🥉"][i]+" ":""}<b>${esc(p.nick)}</b> <span class="muted small">${p.team?esc(S.cfg["team"+p.team].name):"sans équipe"}</span></span><span class="v num">${fmtPts(p.pts)}</span>`).join("")}</div></div>
   ${S.days.map(d=>{ const p=dparts(d.id); const golf=COURSES[d.course];
-    return `<div class="card"><div class="day"><div class="d"><b>${p.d}</b><span>${p.dow}</span></div><div><b>${esc(dayTitle(d))}</b><br><span class="muted small">${golf?(d.teeTime?"Départ "+esc(d.teeTime):"Heure à confirmer"):(d.label?"":"")}${d.note?" · "+esc(d.note):""}</span></div>${golf?`<span class="res ${d.result||""}">${resLabel(d.result)||"À jouer"}</span>`:""}</div>
+    return `<div class="card"><div class="day"><div class="d"><b>${p.d}</b><span>${p.dow}</span></div><div><b>${esc(dayTitle(d))}</b><br><span class="muted small">${golf?(d.teeTime?"Départ "+esc(d.teeTime):"Heure à confirmer"):(d.label?"":"")}${d.note?" · "+esc(d.note):""}</span></div>${golf?(()=>{ const r=effResult(d); const s=liveSummary(d); const sub=s&&s.started?`<span class="muted small num" style="text-align:center">${fmtPts(s.a)} – ${fmtPts(s.b)}</span>`:""; return `<span style="display:grid;gap:2px;justify-items:center"><span class="res ${r||""}">${resLabel(r)||(s&&s.started?"En cours":"À jouer")}</span>${sub}</span>`; })():""}</div>
     ${matchesHtml(d)}
     ${photoBlock(d,"small")}</div>`; }).join("")}`;
   bindPhotos($("#p-board"));
@@ -957,7 +962,7 @@ function renderAdmin(){
           return [0,1,2].map(i=>{ const m=(d.matches||[])[i]||{a:["",""],b:["",""]}; const opt=(team,v)=>`<option value="">—</option>`+teamOf(team).filter(p=>p.id===v||!used.has(p.id)).map(p=>`<option value="${p.id}" ${p.id===v?"selected":""}>${esc(p.nick)}</option>`).join("");
           return `<div class="adm-match"><select data-m="${i}" data-side="a" data-k="0">${opt("A",m.a?.[0])}</select><select data-m="${i}" data-side="a" data-k="1">${opt("A",m.a?.[1])}</select><span class="muted small">vs</span><select data-m="${i}" data-side="b" data-k="0">${opt("B",m.b?.[0])}</select><select data-m="${i}" data-side="b" data-k="1">${opt("B",m.b?.[1])}</select></div>`; }).join(""); })()}
         <button class="btn sm ghost" data-shufflematches="1" style="justify-self:start">Tirer les parties au sort</button></div>
-      <div class="seg"><button class="A" data-r="A" aria-pressed="${d.result==="A"}">${esc(c.teamA.name)}</button><button class="draw" data-r="draw" aria-pressed="${d.result==="draw"}">Égalité</button><button class="B" data-r="B" aria-pressed="${d.result==="B"}">${esc(c.teamB.name)}</button><button data-r="" aria-pressed="${!d.result}">À jouer</button></div>`:""}
+      <div class="seg"><button class="A" data-r="A" aria-pressed="${d.result==="A"}">${esc(c.teamA.name)}</button><button class="draw" data-r="draw" aria-pressed="${d.result==="draw"}">Égalité</button><button class="B" data-r="B" aria-pressed="${d.result==="B"}">${esc(c.teamB.name)}</button><button data-r="" aria-pressed="${!d.result}">${(()=>{const s=liveSummary(d); return s&&s.done?"Auto (Live "+fmtPts(s.a)+"–"+fmtPts(s.b)+")":"À jouer";})()}</button></div>`:""}
       ${S.photos[d.id]?`<button class="btn sm ghost" data-rmphoto="${d.id}">Retirer la photo du jour</button>`:""}
     </div>`;}).join("")}
   </div>
@@ -1058,7 +1063,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261028-214054";
+const BUILD="20261028-214248";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
