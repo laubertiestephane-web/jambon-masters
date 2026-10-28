@@ -237,6 +237,13 @@ img{max-width:100%}
 .holebtns small{font-size:.7rem;opacity:.9;font-weight:700}
 .daychips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
 .daychips .chip{white-space:nowrap}
+/* Météo */
+.wx{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
+.wx .ico{width:64px;height:64px}
+.wx .t{font-family:var(--display);font-size:2rem;line-height:1}
+.wx .row{gap:6px}
+.wxday{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding-top:10px;margin-top:10px;border-top:1px solid var(--line)}
+.wxday .ico{width:40px;height:40px}
 .adminlink{display:block;text-align:center;color:var(--muted);font-size:.75rem;margin-top:18px;text-decoration:underline;background:none}
 </style>
 </head>
@@ -472,12 +479,13 @@ const DEFAULT_CFG = {
   villaArrival:"Arrivée prévue le 30 vers 19h30 – 20h. Catherine (gouvernante) nous attend.",
   villaNotes:"9 nuits · ménage quotidien inclus · Thomas V. nous rejoint à Joburg pour le vol vers George."
 };
+const GEO = { knysnaTown:{lat:-34.036,lon:23.047,name:"Knysna"}, pezula:{lat:-34.058,lon:23.085}, simola:{lat:-33.995,lon:23.035}, plettenberg:{lat:-34.045,lon:23.357}, goose:{lat:-34.033,lon:23.395}, knysna:{lat:-34.049,lon:23.068} };
 const VILLA = {name:"Cloud 9 Villa", estate:"Pezula Golf Estate", addr:"Welbedacht Lane, Rexford, Knysna 6571", phone:"+27 83 459 4540", maps:"Cloud+9+Estate+Welbedacht+Lane+Rexford+Knysna"};
 const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, Knysna Rd, George 6530", maps:"Shop+55+Eden+Meander+Lifestyle+Centre+Knysna+Rd+George+6530"};
 
 // ---------- État ----------
 const S = { tab:"home", cfg:{...DEFAULT_CFG}, players:DEFAULT_PLAYERS.slice(), days:DEFAULT_DAYS.slice(), photos:{}, profiles:{}, expenses:[], settled:{}, admins:[], adminRequests:[],
-  db:null, user:null, assets:null, wall:[], live:{}, liveDay:"", fx:{rate:2.84, live:false, date:"", mur:"", zar:""}, me:"", greeted:false, isOwner:false, canWrite:null, uid:null, dbReady:false };
+  db:null, user:null, assets:null, wall:[], wx:{}, live:{}, liveDay:"", fx:{rate:2.84, live:false, date:"", mur:"", zar:""}, me:"", greeted:false, isOwner:false, canWrite:null, uid:null, dbReady:false };
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -572,6 +580,39 @@ const PIGGY = `<svg class="piggy" viewBox="0 0 96 84" xmlns="http://www.w3.org/2
 <circle cx="70" cy="50" r="2.4" fill="#2A1A20"/><path d="M16 60 q-6 2 -4 8" stroke="#F08FB0" stroke-width="3" fill="none" stroke-linecap="round"/>
 <rect x="30" y="74" width="7" height="8" rx="2" fill="#E98BAA"/><rect x="60" y="74" width="7" height="8" rx="2" fill="#E98BAA"/></g></svg>`;
 
+// ---------- Météo (Open-Meteo, sans clé) ----------
+const WX_TXT = c => c===0?"Grand soleil":c<=2?"Soleil voilé":c===3?"Nuageux":c<=48?"Brouillard":c<=57?"Bruine":c<=67?"Pluie":c<=77?"Neige (!)":c<=82?"Averses":"Orage";
+function wxIcon(code, size=64){ // cochon + soleil / nuage / pluie
+  const sun=`<circle cx="22" cy="20" r="10" fill="#FFD500"/><g stroke="#FFD500" stroke-width="2.5" stroke-linecap="round"><path d="M22 4v4M22 32v4M6 20h4M34 20h4M10 8l3 3M31 29l3 3M34 8l-3 3M13 29l-3 3"/></g>`;
+  const cloud=`<path d="M14 38 h30 a8 8 0 0 0 0 -16 a11 11 0 0 0 -21 -3 a8 8 0 0 0 -9 19z" fill="#D9DEE8" stroke="#B8C0CF" stroke-width="1.5"/>`;
+  const rain=`<g stroke="#4A9CCB" stroke-width="2.5" stroke-linecap="round"><path d="M20 42l-3 7M30 42l-3 7M40 42l-3 7"/></g>`;
+  const bolt=`<path d="M30 40l-6 10h5l-3 9 9-12h-5l3-7z" fill="#FFD500"/>`;
+  const umbrella=`<path d="M38 44 a14 14 0 0 1 28 0z" fill="#E3146B"/><path d="M52 44v14a3 3 0 0 0 6 0" stroke="#7A1F3E" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+  let sky = code===0 ? sun : code<=2 ? sun+cloud : code===3||code<=48 ? cloud : code>=95 ? cloud+bolt : cloud+rain;
+  const pig=`<g transform="translate(34 40) scale(.75)">${PIG_HEAD.replace(/<svg[^>]*>|<\/svg>/g,"")}</g>`;
+  return `<svg class="ico" viewBox="0 0 80 80" style="width:${size}px;height:${size}px" aria-hidden="true">${sky}${pig}${code>=51&&code<95?umbrella:""}</svg>`;
+}
+async function loadWeather(key){ const g=GEO[key]; if(!g || S.wx[key]) return; try{
+  const u=`https://api.open-meteo.com/v1/forecast?latitude=${g.lat}&longitude=${g.lon}&current=temperature_2m,weather_code,wind_speed_10m&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max&timezone=Africa%2FJohannesburg&forecast_days=10`;
+  const r=await fetch(u); const j=await r.json(); if(j && j.daily){ S.wx[key]=j; if(S.tab==="home") render(); } }catch(e){ console.warn("wx",e); } }
+function wxAt(j, dayId, hour){ if(!j||!j.hourly) return null; const i=j.hourly.time.indexOf(dayId+"T"+String(hour).padStart(2,"0")+":00"); if(i<0) return null; return {t:j.hourly.temperature_2m[i], rain:j.hourly.precipitation_probability[i], wind:j.hourly.wind_speed_10m[i], code:j.hourly.weather_code[i]}; }
+function wxDay(j, dayId){ if(!j||!j.daily) return null; const i=j.daily.time.indexOf(dayId); if(i<0) return null; return {max:j.daily.temperature_2m_max[i], min:j.daily.temperature_2m_min[i], rain:j.daily.precipitation_probability_max[i], wind:j.daily.wind_speed_10m_max[i], code:j.daily.weather_code[i]}; }
+function teeHour(d){ const m=(d.teeTime||"").match(/(\d{1,2})\s*[h:]/); return m?+m[1]:13; }
+function weatherCard(){
+  const t=todayId(); const inTrip = t>=TRIP_START && t<=TRIP_END;
+  const golf=golfDays(); const next = golf.find(d=>d.id>=t); // golf du jour ou prochain
+  const townKey = "knysnaTown"; loadWeather(townKey); if(next) loadWeather(next.course);
+  const jt=S.wx[townKey]; if(!jt) return "";
+  const cur=jt.current||{}; const today=wxDay(jt,t);
+  let html=`<div class="card"><div class="eyebrow">Météo${inTrip?" · Knysna":" · Knysna, en ce moment"}</div>
+    <div class="wx">${wxIcon(cur.weather_code??(today?.code??3))}<div><span class="t num">${Math.round(cur.temperature_2m??today?.max??0)}°</span> <span class="muted">${WX_TXT(cur.weather_code??(today?.code??3))}</span><br><span class="small muted num">${today?`${Math.round(today.min)}° / ${Math.round(today.max)}° · pluie ${today.rain}% · vent max ${Math.round(today.wind)} km/h`:""}</span></div></div>`;
+  if(next){ const jc=S.wx[next.course]; const h=teeHour(next); const w=jc?wxAt(jc,next.id,h):null; const dd=jc?wxDay(jc,next.id):null; const p=dparts(next.id);
+    if(w||dd){ const c=COURSES[next.course]; html+=`<div class="wxday">${wxIcon((w||dd).code,40)}<div><b>${next.id===t?"Aujourd'hui":p.dow+" "+p.d+" "+p.mon} · ${esc(c.short)}</b><br><span class="small muted">${w?`à ${h}h : ${Math.round(w.t)}° · vent ${Math.round(w.wind)} km/h · pluie ${w.rain}%`:`${Math.round(dd.min)}° / ${Math.round(dd.max)}° · pluie ${dd.rain}% · vent ${Math.round(dd.wind)} km/h`}</span></div><span class="small muted">${WX_TXT((w||dd).code)}</span></div>`; }
+    else if(jc){ html+=`<p class="muted small" style="margin-top:8px">Prévision pour ${COURSES[next.course].short} disponible à partir de J-10.</p>`; } }
+  html+=`<p class="muted small" style="margin-top:6px">Source : Open-Meteo, heure locale d'Afrique du Sud.</p></div>`;
+  return html;
+}
+
 // ---------- Onglets ----------
 const TABS = [["home","Accueil",I.home],["live","Live",I.live],["trip","Voyage",I.plane],["courses","Parcours",I.flag],["board","Classement",I.trophy],["wall","Mur",I.cam],["people","Jambons",I.people],["money","Frais",I.money]];
 function renderTabs(){
@@ -620,7 +661,7 @@ function renderHome(){
   const meP = playerById(myPlayerId());
   const welcome = meP ? ""
     : `<div class="welcome"><h2>Bienvenue à toi, petit jambon !</h2><span class="small">Dis-nous qui tu es : l'appli te reconnaîtra à chaque ouverture.</span><button class="btn primary" id="pickMe" style="justify-self:start;margin-top:6px">C'est moi…</button></div>`;
-  const html = `${welcome}${installCard()}${top}
+  const html = `${welcome}${installCard()}${top}${weatherCard()}
   <div class="card"><div class="eyebrow">Jambon Masters · classement par équipe</div>
     <div class="score">
       <div class="team"><span class="name"><span class="dot" style="background:var(--teamA)"></span> ${esc(S.cfg.teamA.name)}</span><span class="pts num">${fmtPts(a)}</span></div>
@@ -1065,7 +1106,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261028-214647";
+const BUILD="20261028-221342";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
