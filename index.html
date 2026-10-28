@@ -520,7 +520,7 @@ function smartDraw(dayId){
     if(score<bestScore){ bestScore=score; best=ms; if(score===0) break; } }
   return best;
 }
-function matchesHtml(d){ const ms=(d.matches||[]).filter(m=>m && (m.a||[]).some(Boolean) || (m.b||[]).some(Boolean)); if(!ms.length) return ""; const nm=id=>{const p=playerById(id); return p?esc(p.nick):"—";};
+function matchesHtml(d){ const ms=validMatches(d); if(!ms.length) return ""; const nm=id=>{const p=playerById(id); return p?esc(p.nick):"—";};
   return `<div class="matches">${ms.map((m,i)=>`<div class="match"><span class="mn">${i+1}</span><span class="mA">${(m.a||[]).map(nm).join(" & ")}</span><span class="mv">${PIG_HEAD.replace('class="pighead"','class="pighead sm"')}</span><span class="mB">${(m.b||[]).map(nm).join(" & ")}</span></div>`).join("")}</div>`; }
 function fmtPts(n){ return Number.isInteger(n)? String(n) : n.toFixed(1).replace(".",","); }
 function blob(id){ return id; }
@@ -1106,7 +1106,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261028-221342";
+const BUILD="20261028-222331";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
