@@ -854,8 +854,9 @@ function renderAdmin(){
       <div class="grid2"><div class="field"><label>Heure de départ</label><input data-f="teeTime" type="text" value="${esc(d.teeTime)}" placeholder="ex. 13h30 – 13h50"></div><div class="field"><label>Libellé (pause / note)</label><input data-f="label" value="${esc(d.label||"")}" placeholder="optionnel"></div></div>
       <div class="field"><label>Note du jour (visible par tous)</label><input data-f="note" value="${esc(d.note||"")}" placeholder="ex. voiturettes réservées, départ villa 7h15"></div>
       ${COURSES[d.course]?`<div class="field"><label>Parties (2 ${esc(c.teamA.name)} contre 2 ${esc(c.teamB.name)})</label>
-        ${[0,1,2].map(i=>{ const m=(d.matches||[])[i]||{a:["",""],b:["",""]}; const opt=(team,v)=>`<option value="">—</option>`+teamOf(team).map(p=>`<option value="${p.id}" ${p.id===v?"selected":""}>${esc(p.nick)}</option>`).join("");
-          return `<div class="adm-match"><select data-m="${i}" data-side="a" data-k="0">${opt("A",m.a?.[0])}</select><select data-m="${i}" data-side="a" data-k="1">${opt("A",m.a?.[1])}</select><span class="muted small">vs</span><select data-m="${i}" data-side="b" data-k="0">${opt("B",m.b?.[0])}</select><select data-m="${i}" data-side="b" data-k="1">${opt("B",m.b?.[1])}</select></div>`; }).join("")}
+        ${(()=>{ const used=new Set(); (d.matches||[]).forEach(m=>[...(m?.a||[]),...(m?.b||[])].forEach(x=>{ if(x) used.add(x); }));
+          return [0,1,2].map(i=>{ const m=(d.matches||[])[i]||{a:["",""],b:["",""]}; const opt=(team,v)=>`<option value="">—</option>`+teamOf(team).filter(p=>p.id===v||!used.has(p.id)).map(p=>`<option value="${p.id}" ${p.id===v?"selected":""}>${esc(p.nick)}</option>`).join("");
+          return `<div class="adm-match"><select data-m="${i}" data-side="a" data-k="0">${opt("A",m.a?.[0])}</select><select data-m="${i}" data-side="a" data-k="1">${opt("A",m.a?.[1])}</select><span class="muted small">vs</span><select data-m="${i}" data-side="b" data-k="0">${opt("B",m.b?.[0])}</select><select data-m="${i}" data-side="b" data-k="1">${opt("B",m.b?.[1])}</select></div>`; }).join(""); })()}
         <button class="btn sm ghost" data-shufflematches="1" style="justify-self:start">Tirer les parties au sort</button></div>
       <div class="seg"><button class="A" data-r="A" aria-pressed="${d.result==="A"}">${esc(c.teamA.name)}</button><button class="draw" data-r="draw" aria-pressed="${d.result==="draw"}">Égalité</button><button class="B" data-r="B" aria-pressed="${d.result==="B"}">${esc(c.teamB.name)}</button><button data-r="" aria-pressed="${!d.result}">À jouer</button></div>`:""}
       ${S.photos[d.id]?`<button class="btn sm ghost" data-rmphoto="${d.id}">Retirer la photo du jour</button>`:""}
@@ -892,7 +893,7 @@ function renderAdmin(){
   root.querySelectorAll(".adm-day").forEach(el=>{ const d=S.days.find(x=>x.id===el.dataset.day); const ds=debounce(()=>save("days/"+d.id,{...d}),500);
     el.querySelectorAll("[data-f]").forEach(i=>i.oninput=e=>{ d[i.dataset.f]=e.target.value; if(i.dataset.f==="course"){ save("days/"+d.id,{...d}); renderAdmin(); } else ds(); });
     el.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ d.result=b.dataset.r; save("days/"+d.id,{...d}); renderAdmin(); });
-    el.querySelectorAll("select[data-m]").forEach(s=>s.onchange=()=>{ const ms=[0,1,2].map(i=>(d.matches||[])[i]||{a:["",""],b:["",""]}); const m=ms[+s.dataset.m]; m[s.dataset.side]=[...(m[s.dataset.side]||["",""])]; m[s.dataset.side][+s.dataset.k]=s.value; d.matches=ms; save("days/"+d.id,{...d}); });
+    el.querySelectorAll("select[data-m]").forEach(s=>s.onchange=()=>{ const ms=[0,1,2].map(i=>(d.matches||[])[i]||{a:["",""],b:["",""]}); const m=ms[+s.dataset.m]; m[s.dataset.side]=[...(m[s.dataset.side]||["",""])]; m[s.dataset.side][+s.dataset.k]=s.value; d.matches=ms; save("days/"+d.id,{...d}); renderAdmin(); const el2=document.querySelector(`.adm-day[data-day="${d.id}"]`); if(el2) el2.scrollIntoView({block:"nearest"}); });
     el.querySelectorAll("[data-shufflematches]").forEach(b=>b.onclick=()=>{ const r=smartDraw(d.id); if(!r) return toast("Il faut 6 joueurs par équipe"); d.matches=r; save("days/"+d.id,{...d}); renderAdmin(); toast("Parties tirées : chacun joue avec un maximum de copains différents"); });
     el.querySelectorAll("[data-rmphoto]").forEach(b=>b.onclick=()=>confirmSheet("Retirer la photo de cette journée ?",async()=>{ await S.db.doc("photos/"+d.id).delete(); toast("Photo retirée"); })); });
   const plSave={}; root.querySelectorAll("[data-pl]").forEach(i=>i.oninput=e=>{ const p=playerById(i.dataset.pl); p[i.dataset.f]=e.target.value; (plSave[p.id]||(plSave[p.id]=debounce(()=>save("players/"+p.id,{...p}),600)))(); });
@@ -957,7 +958,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261028-210119";
+const BUILD="20261028-211526";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
