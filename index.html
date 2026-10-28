@@ -814,11 +814,11 @@ function renderLive(){
   let ptsA=0, ptsB=0, projA=0, projB=0;
   const rows = matches.map((m,i)=>{ const st=matchState(L.m[i].holes||[]);
     if(st.closed){ if(st.winner==="A")ptsA++; else if(st.winner==="B")ptsB++; else {ptsA+=.5;ptsB+=.5;} }
-    if(st.diff>0)projA++; else if(st.diff<0)projB++; else {projA+=.5;projB+=.5;}
+    if(st.played){ if(st.diff>0)projA++; else if(st.diff<0)projB++; else {projA+=.5;projB+=.5;} }
     const pct=Math.min(100,st.played?Math.abs(st.diff)/Math.max(1,Math.min(6,st.played))*50:0);
     return `<button class="lb-row ${st.closed?"done":""}" data-live="${i}" ${can?"":"disabled"}>
       <span class="pair A">${pairNames(m.a).map(n=>`<span>${n}</span>`).join("")}</span>
-      <span class="st"><b class="${st.cls}">${st.label}</b><small>${st.closed?"Terminé":st.played?"thru "+st.played:"Pas commencé"}</small></span>
+      <span class="st"><b class="${st.played?st.cls:""}">${st.played?st.label:"—"}</b><small>${st.closed?"Terminé":st.played?"thru "+st.played:"Pas commencé"}</small></span>
       <span class="pair B">${pairNames(m.b).map(n=>`<span>${n}</span>`).join("")}</span>
       <span class="bar"><i class="${st.diff<0?"B":""}" style="${st.diff>0?`right:50%;left:auto;width:${pct}%`:st.diff<0?`left:50%;width:${pct}%`:""}"></i></span>
     </button>`; }).join("");
@@ -1058,7 +1058,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261028-212514";
+const BUILD="20261028-214054";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
