@@ -521,7 +521,7 @@ const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, 
 
 // ---------- État ----------
 const S = { tab:"home", cfg:{...DEFAULT_CFG}, players:DEFAULT_PLAYERS.slice(), days:DEFAULT_DAYS.slice(), photos:{}, profiles:{}, expenses:[], settled:{}, admins:[], adminRequests:[],
-  db:null, user:null, assets:null, wall:[], wx:{}, live:{}, liveDay:"", scores:{}, scoreDay:"", rankMode:"net", rankScope:"day", fx:{rate:2.84, live:false, date:"", mur:"", zar:""}, me:"", greeted:false, isOwner:false, canWrite:null, uid:null, dbReady:false };
+  db:null, user:null, assets:null, wall:[], wx:{}, live:{}, liveDay:"", scores:{}, scoreDay:"", rankMode:"stableford", rankScope:"day", fx:{rate:2.84, live:false, date:"", mur:"", zar:""}, me:"", greeted:false, isOwner:false, canWrite:null, uid:null, dbReady:false };
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -540,7 +540,13 @@ function liveSummary(d){ const ms=validMatches(d); if(!ms.length) return null;
   const L=S.live[d.id]; if(!L||!L.m) return null; let a=0,b=0,closed=0,started=0;
   ms.forEach((m,i)=>{ const st=matchState((L.m[i]&&L.m[i].holes)||[]); if(st.played) started++; if(st.closed){ closed++; if(st.winner==="A")a++; else if(st.winner==="B")b++; else {a+=.5;b+=.5;} } });
   return {a,b,closed,started,total:ms.length,done:closed===ms.length}; }
-function effResult(d){ if(d.result) return d.result; const s=liveSummary(d); if(s && s.done){ return s.a>s.b?"A":s.b>s.a?"B":"draw"; } return ""; }
+function teamStb(d){ if(!CARDS[d.course]) return null; const card=CARDS[d.course]; const tp={A:S.players.filter(p=>p.team==="A"),B:S.players.filter(p=>p.team==="B")}; if(!tp.A.length||!tp.B.length) return null;
+  const pts={}; let any=false, complete=true; for(const p of [...tp.A,...tp.B]){ const r=computeScore(d,p); if(r.n) any=true; if(!r.complete) complete=false; const ph=r.ph; pts[p.id]=r.holes.map((g,i)=> g==null?null:Math.max(0,2+card.par[i]+strokesOnHole(ph,card.si[i])-g)); }
+  const tot={A:0,B:0}; let holes=0;
+  for(let i=0;i<18;i++){ let hole=false; for(const T of ["A","B"]){ const v=tp[T].map(p=>pts[p.id][i]).filter(x=>x!=null).sort((x,y)=>y-x).slice(0,3); if(v.length){ hole=true; tot[T]+=v.reduce((s,x)=>s+x,0); } } if(hole) holes++; }
+  return {a:tot.A,b:tot.B,started:any,done:any&&complete,holes,total:18,kind:"stb"}; }
+function daySummary(d){ const gd=golfDays(); const isFinal = gd.length && d.id===gd[gd.length-1].id; if(isFinal){ const s=liveSummary(d); return s?{...s,kind:"mp"}:null; } return teamStb(d); }
+function effResult(d){ if(d.result) return d.result; const s=daySummary(d); if(s && s.done){ return s.a>s.b?"A":s.b>s.a?"B":"draw"; } return ""; }
 function points(){ let a=0,b=0; for(const d of S.days){ const r=effResult(d); if(r==="A")a++; else if(r==="B")b++; else if(r==="draw"){a+=.5;b+=.5;} } return {a,b}; }
 function mvp(){ const pts={}; S.players.forEach(p=>pts[p.id]=0); for(const d of S.days){ const r=effResult(d); if(!r) continue; for(const p of S.players){ if(!p.team) continue; if(r==="draw") pts[p.id]+=.5; else if(r===p.team) pts[p.id]+=1; } } return S.players.slice().sort((a,b)=>pts[b.id]-pts[a.id]||a.order-b.order).map(p=>({...p,pts:pts[p.id]})); }
 // Tirage des parties : on cherche la combinaison où chacun retrouve le moins possible
@@ -791,7 +797,7 @@ function renderBoard(){
   <div class="card"><div class="eyebrow">Course au MVP</div>
     <div class="bal">${mvp().map((p,i)=>`<span>${i<3&&p.pts>0?["🥇","🥈","🥉"][i]+" ":""}<b>${esc(p.nick)}</b> <span class="muted small">${p.team?esc(S.cfg["team"+p.team].name):"sans équipe"}</span></span><span class="v num">${fmtPts(p.pts)}</span>`).join("")}</div></div>
   ${S.days.map(d=>{ const p=dparts(d.id); const golf=COURSES[d.course];
-    return `<div class="card"><div class="day"><div class="d"><b>${p.d}</b><span>${p.dow}</span></div><div><b>${esc(dayTitle(d))}</b><br><span class="muted small">${golf?(d.teeTime?"Départ "+esc(d.teeTime):"Heure à confirmer"):(d.label?"":"")}${d.note?" · "+esc(d.note):""}</span></div>${golf?(()=>{ const r=effResult(d); const s=liveSummary(d); const sub=s&&s.started?`<span class="muted small num" style="text-align:center">${fmtPts(s.a)} – ${fmtPts(s.b)}</span>`:""; return `<span style="display:grid;gap:2px;justify-items:center"><span class="res ${r||""}">${resLabel(r)||(s&&s.started?"En cours":"À jouer")}</span>${sub}</span>`; })():""}</div>
+    return `<div class="card"><div class="day"><div class="d"><b>${p.d}</b><span>${p.dow}</span></div><div><b>${esc(dayTitle(d))}</b><br><span class="muted small">${golf?(d.teeTime?"Départ "+esc(d.teeTime):"Heure à confirmer"):(d.label?"":"")}${d.note?" · "+esc(d.note):""}</span></div>${golf?(()=>{ const r=effResult(d); const s=daySummary(d); const sub=s&&s.started?`<span class="muted small num" style="text-align:center">${fmtPts(s.a)} – ${fmtPts(s.b)}${s.kind==="stb"?" pts":""}</span>`:""; return `<span style="display:grid;gap:2px;justify-items:center"><span class="res ${r||""}">${resLabel(r)||(s&&s.started?"En cours":"À jouer")}</span>${sub}</span>`; })():""}</div>
     ${matchesHtml(d)}
     ${photoBlock(d,"small")}</div>`; }).join("")}`;
   bindPhotos($("#p-board"));
@@ -918,14 +924,20 @@ function renderLive(){
     rows = matches.map((m,i)=>{ const ids=[...m.a,...m.b]; const thru=Math.min(...ids.map(id=>computeScore(d,playerById(id)).n));
       return `<button class="lb-row" data-ms="${i}" ${can?"":"disabled"}>
         <span class="pair A">${m.a.map(id=>playerScoreLine(d,id)).join("")}</span>
-        <span class="st"><b>${i+1}</b><small>${thru>=18?"Terminé":thru>0?"thru "+thru:"Partie "+(i+1)}</small></span>
+        <span class="st"><b>${i+1}</b><small>${thru>=18?"Terminé":thru>0?"thru "+thru:"à jouer"}</small></span>
         <span class="pair B">${m.b.map(id=>playerScoreLine(d,id)).join("")}</span>
       </button>`; }).join("");
-    head=`<div class="card" style="padding:12px 16px"><div class="eyebrow">Live · ${esc(c.name)}</div><h2>${p.dow} ${p.d} ${p.mon} · par ${CARDS[d.course].par.reduce((a,b)=>a+b,0)}</h2><p class="muted small">Appuie sur ta partie pour saisir les coups de chacun, trou par trou. Le chiffre à côté du nom = score net par rapport au par.</p></div>`;
+    const ts=teamStb(d);
+    head=`<div class="lb-head">
+      <div class="side A"><span class="nm">${esc(S.cfg.teamA.name)}</span><span class="big num">${ts?ts.a:"—"}</span><span class="small" style="opacity:.9">pts · 3 meilleurs / trou</span></div>
+      <div class="mid">${PIG_HEAD}<small>${esc(c.short)}<br>${p.dow} ${p.d} ${p.mon}${ts&&ts.started?"<br>thru "+ts.holes:""}</small></div>
+      <div class="side B"><span class="nm">${esc(S.cfg.teamB.name)}</span><span class="big num">${ts?ts.b:"—"}</span><span class="small" style="opacity:.9">pts · 3 meilleurs / trou</span></div>
+    </div>
+    <p class="muted small" style="text-align:center">Appuie sur ta partie pour saisir les coups de chacun. À côté du nom : points Stableford. Total équipe = sur chaque trou, les 3 meilleurs Stableford des 6 joueurs.</p>`;
   }
   const ps=S.players.slice().sort((a,b)=>a.order-b.order);
   const fallback = matches.length ? "" : `<div class="card"><div class="eyebrow">Saisir les scores</div><p class="muted small">Les parties de cette journée ne sont pas encore constituées (Réglages). En attendant, choisis un joueur :</p>
-    <div class="plist">${ps.map(q=>{ const r=computeScore(d,q); return `<button data-score="${q.id}" ${can?"":"disabled"}><span class="av">${avatarHtml(q)}</span><span>${esc(q.nick)}<br><small class="muted">${r.n?`${r.n} trou${r.n>1?"s":""} · brut ${r.gross} · net ${r.net}`:"pas encore de score"}</small></span><span class="tot num">${r.n?fmtToPar(r.toParNet):"—"}</span></button>`; }).join("")}</div></div>`;
+    <div class="plist">${ps.map(q=>{ const r=computeScore(d,q); return `<button data-score="${q.id}" ${can?"":"disabled"}><span class="av">${avatarHtml(q)}</span><span>${esc(q.nick)}<br><small class="muted">${r.n?`${r.n} trou${r.n>1?"s":""} · brut ${r.gross} · net ${r.net}`:"pas encore de score"}</small></span><span class="tot num">${r.n?r.stb+" pts":"—"}</span></button>`; }).join("")}</div></div>`;
   $("#p-live").innerHTML = chips+head+(rows?`<div class="stack">${rows}</div>${isFinal?`<p class="muted small" style="text-align:center">Dernière journée : match play. Appuie sur une partie pour les scores ; le bouton « Match play » y donne le trou gagné.</p>`:""}`:"")+fallback+rankingCard(d);
   $("#p-live").querySelectorAll("[data-lday]").forEach(b=>b.onclick=()=>{ S.liveDay=b.dataset.lday; renderLive(); });
   $("#p-live").querySelectorAll("[data-ms]").forEach(b=>b.onclick=()=>{ const m=matches[+b.dataset.ms]; openScoreSheet(d.id, m.a[0], [...m.a,...m.b], +b.dataset.ms); });
@@ -971,18 +983,18 @@ function rankingCard(d){
   const gd=golfDays(); const ps=S.players.slice().sort((a,b)=>a.order-b.order); const mode=S.rankMode, scope=S.rankScope;
   let rows=[];
   if(scope==="day"){ rows=ps.map(p=>({p,...computeScore(d,p)})).filter(r=>r.n>0); }
-  else { rows=ps.map(p=>{ let gross=0,net=0,par=0,days=0,n=0,ph=playingHcp(p); for(const dd of gd){ if(!CARDS[dd.course]) continue; const r=computeScore(dd,p); if(r.n){ gross+=r.gross; net+=r.net; par+=r.par; n+=r.n; days++; } } return {p,gross,net,par,n,days,ph,toParGross:gross-par,toParNet:net-par,complete:true,hcpMissing:playerHcp(p)===null}; }).filter(r=>r.n>0); }
-  const val=r=> mode==="gross"?r.toParGross:r.toParNet;
+  else { rows=ps.map(p=>{ let gross=0,net=0,stb=0,par=0,days=0,n=0,ph=playingHcp(p); for(const dd of gd){ if(!CARDS[dd.course]) continue; const r=computeScore(dd,p); if(r.n){ gross+=r.gross; net+=r.net; stb+=r.stb; par+=r.par; n+=r.n; days++; } } return {p,gross,net,stb,par,n,days,ph,toParGross:gross-par,toParNet:net-par,complete:true,hcpMissing:playerHcp(p)===null}; }).filter(r=>r.n>0); }
+  const val=r=> mode==="gross"?r.toParGross:mode==="net"?r.toParNet:-r.stb;
   rows.sort((a,b)=> val(a)-val(b) || a.n-b.n);
-  const label=r=> mode==="gross"?`${r.gross} <small class="muted">(${fmtToPar(r.toParGross)})</small>`:`${r.net} <small class="muted">(${fmtToPar(r.toParNet)})</small>`;
+  const label=r=> mode==="gross"?`${r.gross} <small class="muted">(${fmtToPar(r.toParGross)})</small>`:mode==="net"?`${r.net} <small class="muted">(${fmtToPar(r.toParNet)})</small>`:`${r.stb} <small class="muted">pts</small>`;
   const thru=r=> scope==="day" ? (r.complete?"18 trous":"thru "+r.n) : (r.days+" j · "+r.n+" trous");
   const p0=dparts(d.id);
   const html=`<div class="card" id="rankCard">
     <div class="row" style="justify-content:space-between"><div><div class="eyebrow">Classement individuel</div><h2>${scope==="day"?esc(COURSES[d.course].short)+" · "+p0.dow+" "+p0.d:"Semaine"}</h2></div>
       <div class="seg" style="min-width:150px"><button data-scope="day" aria-pressed="${scope==="day"}">Journée</button><button data-scope="week" aria-pressed="${scope==="week"}">Semaine</button></div></div>
-    <div class="chips">${[["gross","Brut"],["net","Net"]].map(([k,l])=>`<button class="chip" data-mode="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</div>
+    <div class="chips">${[["stableford","Stableford"],["gross","Brut"],["net","Net"]].map(([k,l])=>`<button class="chip" data-mode="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</div>
     ${rows.length?`<div class="rank">${rows.map((r,i)=>`<span class="pos ${i<3?"top":""}">${i+1}</span><span class="nm"><b>${esc(r.p.nick)}</b><small>hcp ${r.hcpMissing?"<i>manquant</i>":playerHcp(r.p)}${scope==="day"?" · joue "+r.ph:""}</small></span><span class="val num">${label(r)}</span><span class="thru">${thru(r)}</span>`).join("")}</div>`:`<p class="muted">Aucun score saisi${scope==="day"?" pour cette journée":""}.</p>`}
-    <p class="muted small">${mode==="net"?"Net = coups bruts moins les coups reçus trou par trou (handicap de jeu, index des trous).":"Brut = total des coups, sans handicap."} Classé par rapport au par.</p>
+    <p class="muted small">${mode==="stableford"?"Stableford : points par trou (par net = 2 pts, birdie net = 3…), coups reçus selon l'index du trou et le handicap de jeu.":mode==="net"?"Net = coups bruts moins les coups reçus trou par trou. Classé par rapport au par.":"Brut = total des coups, sans handicap. Classé par rapport au par."}</p>
   </div>`;
   return html;
 }
@@ -990,20 +1002,20 @@ function bindRanking(root){
   root.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{ S.rankMode=b.dataset.mode; renderLive(); });
   root.querySelectorAll("[data-scope]").forEach(b=>b.onclick=()=>{ S.rankScope=b.dataset.scope; renderLive(); });
 }
-function playerScoreLine(d,pid){ const p=playerById(pid); if(!p) return ""; const r=computeScore(d,p); return `<span>${esc(p.nick)} <b class="num">${r.n?fmtToPar(r.toParNet):"—"}</b></span>`; }
+function playerScoreLine(d,pid){ const p=playerById(pid); if(!p) return ""; const r=computeScore(d,p); return `<span>${esc(p.nick)} <b class="num">${r.n?r.stb:"—"}</b></span>`; }
 let scoreSheet=null; const scoreWriteQ={};
 function openScoreSheet(dayId,pid,group,matchIdx){
   group = group && group.length ? group : [pid];
   const draw=()=>{ const d=S.days.find(x=>x.id===dayId); const p=playerById(pid); const card=CARDS[d.course]; const r=computeScore(d,p); const holes=r.holes; const ph=r.ph;
-    const tabs = group.length>1 ? `<div class="ptabs">${group.map(id=>{ const q=playerById(id); if(!q) return ""; const rr=computeScore(d,q); return `<button data-ptab="${id}" aria-pressed="${id===pid}"><span class="av">${avatarHtml(q)}</span><b>${esc(q.nick)}</b><small class="num">${rr.n?fmtToPar(rr.toParNet)+" net · thru "+rr.n:"—"}</small></button>`; }).join("")}</div>` : "";
+    const tabs = group.length>1 ? `<div class="ptabs">${group.map(id=>{ const q=playerById(id); if(!q) return ""; const rr=computeScore(d,q); return `<button data-ptab="${id}" aria-pressed="${id===pid}"><span class="av">${avatarHtml(q)}</span><b>${esc(q.nick)}</b><small class="num">${rr.n?rr.stb+" pts · thru "+rr.n:"—"}</small></button>`; }).join("")}</div>` : "";
     const mp = (matchIdx!=null && d.id===lastGolfDay()) ? `<button class="btn ghost" id="toMatchPlay">🏆 Match play : qui gagne le trou ?</button>` : "";
     const tee = Object.keys(card.tees).includes("Yellow")?"Yellow":Object.keys(card.tees)[0];
     sheet(`<div class="row" style="justify-content:space-between"><h3>${matchIdx!=null?"Partie "+(matchIdx+1):esc(p.nick)} · ${esc(COURSES[d.course].short)}</h3><button class="btn sm ghost" data-close>Fermer</button></div>
       ${tabs}${mp}
-      <div class="scsum"><div><b class="num">${r.n?r.gross:"—"}</b><small>Brut</small></div><div><b class="num">${r.n?r.net:"—"}</b><small>Net</small></div><div><b class="num">${r.n?fmtToPar(r.toParNet):"—"}</b><small>Net vs par</small></div><div><b class="num">${r.n?fmtToPar(r.toParGross):"—"}</b><small>Brut vs par</small></div></div>
+      <div class="scsum"><div><b class="num">${r.n?r.gross:"—"}</b><small>Brut</small></div><div><b class="num">${r.n?r.net:"—"}</b><small>Net</small></div><div><b class="num">${r.n?r.stb:"—"}</b><small>Stableford</small></div><div><b class="num">${r.n?fmtToPar(r.toParGross):"—"}</b><small>Brut vs par</small></div></div>
       <p class="muted small">Handicap ${r.hcpMissing?"<b>manquant</b> (à renseigner dans Jambons → profil)":playerHcp(p)+" · joue "+ph+" coup"+(Math.abs(ph)>1?"s":"")} · ● = coup reçu · distances départs ${({White:"blancs",Yellow:"jaunes",Blue:"bleus",Red:"rouges"})[tee]||tee}</p>
       <div class="hgrid">${card.par.map((pr,i)=>{ const rec=strokesOnHole(ph,card.si[i]); const g=holes[i]; const pts=g==null?"":Math.max(0,2+pr+rec-g); const cls=g==null?"":g<pr?"under":g>pr?"over":"";
-        return `<div class="hrow ${cls}"><span class="hn">${i+1}</span><span class="hi">Par ${pr} · idx ${card.si[i]}<br>${card.tees[tee][i]} m ${"<i></i>".repeat(Math.max(0,rec))}</span><button data-dec="${i}">−</button><span><span class="v ${g==null?"empty":""} num">${g==null?"·":g}</span><div class="pts">${g==null?"":g===pr?"par":g<pr?(g-pr):"+"+(g-pr)}</div></span><button data-inc="${i}">+</button></div>`; }).join("")}</div>
+        return `<div class="hrow ${cls}"><span class="hn">${i+1}</span><span class="hi">Par ${pr} · idx ${card.si[i]}<br>${card.tees[tee][i]} m ${"<i></i>".repeat(Math.max(0,rec))}</span><button data-dec="${i}">−</button><span><span class="v ${g==null?"empty":""} num">${g==null?"·":g}</span><div class="pts">${g==null?"":pts+" pt"+(pts>1?"s":"")}</div></span><button data-inc="${i}">+</button></div>`; }).join("")}</div>
       <div class="grid2"><button class="btn ghost" id="fillPar">Pré-remplir les trous vides au par</button><button class="btn ghost" id="clearScore">Effacer la carte</button></div>`);
     const write=(arr)=>{ const key="live/score_"+dayId+"_"+pid; const prev=scoreWriteQ[key]||Promise.resolve(); scoreWriteQ[key]=prev.then(()=>S.db.doc(key).set({holes:arr.map(v=>v==null?null:v), player:pid, day:dayId, by:S.uid||"", ts:Date.now()})).catch(e=>{ console.error(e); toast("Enregistrement refusé"); }); };
     const upd=(i,delta)=>{ const arr=holes.slice(); const pr=card.par[i]; let v=arr[i]==null?pr:arr[i]; v=Math.max(1,Math.min(15,v+delta)); if(arr[i]==null && delta===0) v=pr; arr[i]=v; S.scores[scoreKey(dayId,pid)]={...(S.scores[scoreKey(dayId,pid)]||{}),holes:arr}; write(arr); draw(); };
@@ -1118,7 +1130,7 @@ function renderAdmin(){
           return [0,1,2].map(i=>{ const m=(d.matches||[])[i]||{a:["",""],b:["",""]}; const opt=(team,v)=>`<option value="">—</option>`+teamOf(team).filter(p=>p.id===v||!used.has(p.id)).map(p=>`<option value="${p.id}" ${p.id===v?"selected":""}>${esc(p.nick)}</option>`).join("");
           return `<div class="adm-match"><select data-m="${i}" data-side="a" data-k="0">${opt("A",m.a?.[0])}</select><select data-m="${i}" data-side="a" data-k="1">${opt("A",m.a?.[1])}</select><span class="muted small">vs</span><select data-m="${i}" data-side="b" data-k="0">${opt("B",m.b?.[0])}</select><select data-m="${i}" data-side="b" data-k="1">${opt("B",m.b?.[1])}</select></div>`; }).join(""); })()}
         <button class="btn sm ghost" data-shufflematches="1" style="justify-self:start">Tirer les parties au sort</button></div>
-      <div class="seg"><button class="A" data-r="A" aria-pressed="${d.result==="A"}">${esc(c.teamA.name)}</button><button class="draw" data-r="draw" aria-pressed="${d.result==="draw"}">Égalité</button><button class="B" data-r="B" aria-pressed="${d.result==="B"}">${esc(c.teamB.name)}</button><button data-r="" aria-pressed="${!d.result}">${(()=>{const s=liveSummary(d); return s&&s.done?"Auto (Live "+fmtPts(s.a)+"–"+fmtPts(s.b)+")":"À jouer";})()}</button></div>`:""}
+      <div class="seg"><button class="A" data-r="A" aria-pressed="${d.result==="A"}">${esc(c.teamA.name)}</button><button class="draw" data-r="draw" aria-pressed="${d.result==="draw"}">Égalité</button><button class="B" data-r="B" aria-pressed="${d.result==="B"}">${esc(c.teamB.name)}</button><button data-r="" aria-pressed="${!d.result}">${(()=>{const s=daySummary(d); return s&&s.done?"Auto (Live "+fmtPts(s.a)+"–"+fmtPts(s.b)+")":"À jouer";})()}</button></div>`:""}
       ${S.photos[d.id]?`<button class="btn sm ghost" data-rmphoto="${d.id}">Retirer la photo du jour</button>`:""}
     </div>`;}).join("")}
   </div>
@@ -1220,7 +1232,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261030-154448";
+const BUILD="20261031-010042";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
