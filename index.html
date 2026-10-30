@@ -516,6 +516,17 @@ const DEFAULT_CFG = {
 const GEO = { knysnaTown:{lat:-34.036,lon:23.047,name:"Knysna"}, pezula:{lat:-34.058,lon:23.085}, simola:{lat:-33.995,lon:23.035}, plettenberg:{lat:-34.045,lon:23.357}, goose:{lat:-34.033,lon:23.395}, knysna:{lat:-34.049,lon:23.068} };
 // Cartes de score (par, index, distances en mètres par départ) — source golfpass
 const CARDS = {"simola":{"par":[5,4,4,4,4,3,5,4,3,4,3,5,4,3,5,4,3,5],"si":[9,17,7,5,3,1,15,13,11,6,4,16,2,18,12,8,10,14],"tees":{"Yellow":[508,338,367,390,374,203,465,380,197,393,201,458,394,182,522,404,157,468],"White":[486,338,334,335,360,183,431,356,156,378,175,436,384,152,485,364,146,444],"Blue":[436,321,321,288,320,172,431,340,148,361,168,412,326,127,402,360,106,424],"Red":[385,284,299,232,264,170,348,226,124,332,133,400,287,127,333,360,100,415]}},"pezula":{"par":[5,4,3,4,3,4,4,4,5,4,3,4,5,4,3,4,4,5],"si":[1,5,15,13,11,7,3,9,17,8,18,4,12,10,16,2,14,6],"tees":{"Black":[532,407,169,340,194,395,433,379,435,362,167,433,524,290,170,365,293,487],"Yellow":[514,380,153,314,175,371,409,357,427,341,143,406,491,277,139,311,268,460],"White":[501,359,131,291,171,344,389,335,403,322,129,371,489,245,131,291,244,438],"Blue":[477,334,113,270,159,317,336,312,367,306,111,326,463,231,113,272,227,414],"Red":[404,317,97,244,150,287,323,280,322,285,74,305,439,227,104,242,199,330]}},"plettenberg":{"par":[4,4,4,5,4,3,5,3,4,4,3,4,3,4,5,4,4,5],"si":[17,3,9,13,1,7,15,5,11,10,18,4,8,14,12,2,6,16],"tees":{"Yellow":[340,383,344,515,370,164,444,180,339,354,122,377,174,309,501,361,347,477],"White":[322,368,339,481,367,149,419,175,323,341,117,362,159,299,465,325,336,465],"Blue":[306,359,326,438,357,144,414,165,317,322,107,334,154,277,444,310,327,423],"Red":[287,350,290,424,346,132,403,155,270,313,102,325,144,242,401,294,287,380]}},"goose":{"par":[4,3,4,4,3,4,5,5,4,4,3,4,3,5,4,5,4,4],"si":[3,7,15,5,17,9,1,13,11,4,14,6,8,12,2,10,18,16],"tees":{"Yellow":[368,188,315,302,140,330,518,461,335,390,152,353,193,471,401,463,310,323],"White":[346,172,304,299,116,320,490,459,286,386,143,337,163,468,398,449,286,321],"Blue":[321,158,289,279,116,295,447,431,282,360,135,318,144,450,371,416,272,289],"Red":[307,143,254,262,90,274,425,397,240,311,129,270,135,360,343,387,260,260]}},"knysna":{"par":[4,3,5,4,4,4,4,3,5,4,4,3,5,3,4,5,4,4],"si":[7,9,15,3,13,1,17,11,5,8,2,10,4,18,16,6,12,14],"tees":{"White":[318,161,448,338,323,371,262,148,444,332,367,175,460,130,310,505,336,324],"Blue":[302,153,412,307,323,346,237,132,419,297,348,165,438,123,310,443,297,299],"Red":[269,145,398,289,287,299,213,105,373,297,306,156,405,123,267,414,283,299]}}};
+// Course rating / slope (hommes). Sources : Simola golfpass 2026 ; Goose Valley table officielle du club (avr. 2026) ; Pezula, Plettenberg, Knysna GC : feuille GolfRSA 2018 (couleurs rapprochées par longueur). Modifiable dans Réglages.
+const RATINGS = {
+  simola:{Yellow:[74.2,141],White:[71.9,137],Blue:[69.6,126],Red:[65.9,113]},
+  pezula:{Black:[74.7,144],Yellow:[72.5,138],White:[70.5,131],Blue:[68.4,125],Red:[65.4,121]},
+  plettenberg:{Yellow:[72.7,139],White:[71.8,138],Blue:[70.1,133],Red:[68.3,128]},
+  goose:{Yellow:[71.6,129],White:[70.2,127],Blue:[68.4,121],Red:[65.5,113]},
+  knysna:{White:[69.3,130],Blue:[70.9,134],Red:[66.8,124]}
+};
+const TEE_FR = {Black:"noirs",Yellow:"jaunes",White:"blancs",Blue:"bleus",Red:"rouges"};
+function dayTee(d){ const card=CARDS[d.course]; if(!card) return ""; const tees=Object.keys(card.tees); return (d.tee && tees.includes(d.tee)) ? d.tee : (tees.includes("White")?"White":tees[0]); }
+function ratingFor(course,tee){ const o=((S.cfg.ratings||{})[course]||{})[tee] || (RATINGS[course]||{})[tee]; if(!o) return null; const cr=parseFloat(o[0]), sl=parseFloat(o[1]); return (cr>0&&sl>0)?{cr,slope:sl}:null; }
 const VILLA = {name:"Cloud 9 Villa", estate:"Pezula Golf Estate", addr:"Welbedacht Lane, Rexford, Knysna 6571", phone:"+27 83 459 4540", maps:"Cloud+9+Estate+Welbedacht+Lane+Rexford+Knysna"};
 const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, Knysna Rd, George 6530", maps:"Shop+55+Eden+Meander+Lifestyle+Centre+Knysna+Rd+George+6530"};
 
@@ -930,7 +941,7 @@ function renderLive(){
     const ts=teamStb(d);
     head=`<div class="lb-head">
       <div class="side A"><span class="nm">${esc(S.cfg.teamA.name)}</span><span class="big num">${ts?ts.a:"—"}</span><span class="small" style="opacity:.9">pts · 3 meilleurs / trou</span></div>
-      <div class="mid">${PIG_HEAD}<small>${esc(c.short)}<br>${p.dow} ${p.d} ${p.mon}${ts&&ts.started?"<br>thru "+ts.holes:""}</small></div>
+      <div class="mid">${PIG_HEAD}<small>${esc(c.short)}<br>${p.dow} ${p.d} ${p.mon}<br>départs ${TEE_FR[dayTee(d)]||dayTee(d)}${ts&&ts.started?" · thru "+ts.holes:""}</small></div>
       <div class="side B"><span class="nm">${esc(S.cfg.teamB.name)}</span><span class="big num">${ts?ts.b:"—"}</span><span class="small" style="opacity:.9">pts · 3 meilleurs / trou</span></div>
     </div>
     <p class="muted small" style="text-align:center">Appuie sur ta partie pour saisir les coups de chacun. À côté du nom : points Stableford. Total équipe = sur chaque trou, les 3 meilleurs Stableford des 6 joueurs.</p>`;
@@ -968,13 +979,13 @@ function openLiveMatch(dayId,i){
 
 // ---------- Scores individuels (brut / net / stableford / stroke) ----------
 function playerHcp(p){ const v=parseFloat(String((S.profiles[p.id]||{}).hcp||"").replace(",",".")); return isNaN(v)?null:v; }
-function playingHcp(p){ const h=playerHcp(p); return h===null?0:Math.round(h); }
+function playingHcp(p,d){ const h=playerHcp(p); if(h===null) return 0; if(!d||!CARDS[d.course]) return Math.round(h); const r=ratingFor(d.course,dayTee(d)); if(!r) return Math.round(h); const par=CARDS[d.course].par.reduce((a,b)=>a+b,0); return Math.round(h*r.slope/113 + (r.cr-par)); }
 function strokesOnHole(ph, si){ // coups reçus sur un trou selon l'index
   if(ph>=0){ const base=Math.floor(ph/18), extra=ph%18; return base + (si<=extra?1:0); }
   const give=-ph; const base=Math.floor(give/18), extra=give%18; return -(base + (si>18-extra?1:0)); }
 function scoreKey(dayId,pid){ return dayId+"_"+pid; }
 function holesOf(dayId,pid){ const s=S.scores[scoreKey(dayId,pid)]; const h=(s&&s.holes)||[]; return Array.from({length:18},(_,i)=>(h[i]==null||h[i]===""?null:+h[i])); }
-function computeScore(d,p){ const card=CARDS[d.course]; const holes=holesOf(d.id,p.id); const ph=playingHcp(p); let gross=0,net=0,stb=0,par=0,n=0;
+function computeScore(d,p){ const card=CARDS[d.course]; const holes=holesOf(d.id,p.id); const ph=playingHcp(p,d); let gross=0,net=0,stb=0,par=0,n=0;
   holes.forEach((g,i)=>{ if(g==null) return; const pr=card.par[i], rec=strokesOnHole(ph,card.si[i]); n++; gross+=g; par+=pr; net+=g-rec; stb+=Math.max(0, 2+pr+rec-g); });
   return {holes,gross,net,stb,par,n,ph,toParGross:gross-par,toParNet:net-par,complete:n===18,hcpMissing:playerHcp(p)===null}; }
 function fmtToPar(v){ return v===0?"E":(v>0?"+"+v:String(v)); }
@@ -983,7 +994,7 @@ function rankingCard(d){
   const gd=golfDays(); const ps=S.players.slice().sort((a,b)=>a.order-b.order); const mode=S.rankMode, scope=S.rankScope;
   let rows=[];
   if(scope==="day"){ rows=ps.map(p=>({p,...computeScore(d,p)})).filter(r=>r.n>0); }
-  else { rows=ps.map(p=>{ let gross=0,net=0,stb=0,par=0,days=0,n=0,ph=playingHcp(p); for(const dd of gd){ if(!CARDS[dd.course]) continue; const r=computeScore(dd,p); if(r.n){ gross+=r.gross; net+=r.net; stb+=r.stb; par+=r.par; n+=r.n; days++; } } return {p,gross,net,stb,par,n,days,ph,toParGross:gross-par,toParNet:net-par,complete:true,hcpMissing:playerHcp(p)===null}; }).filter(r=>r.n>0); }
+  else { rows=ps.map(p=>{ let gross=0,net=0,stb=0,par=0,days=0,n=0,ph=playingHcp(p,d); for(const dd of gd){ if(!CARDS[dd.course]) continue; const r=computeScore(dd,p); if(r.n){ gross+=r.gross; net+=r.net; stb+=r.stb; par+=r.par; n+=r.n; days++; } } return {p,gross,net,stb,par,n,days,ph,toParGross:gross-par,toParNet:net-par,complete:true,hcpMissing:playerHcp(p)===null}; }).filter(r=>r.n>0); }
   const val=r=> mode==="gross"?r.toParGross:mode==="net"?r.toParNet:-r.stb;
   rows.sort((a,b)=> val(a)-val(b) || a.n-b.n);
   const label=r=> mode==="gross"?`${r.gross} <small class="muted">(${fmtToPar(r.toParGross)})</small>`:mode==="net"?`${r.net} <small class="muted">(${fmtToPar(r.toParNet)})</small>`:`${r.stb} <small class="muted">pts</small>`;
@@ -1009,11 +1020,11 @@ function openScoreSheet(dayId,pid,group,matchIdx){
   const draw=()=>{ const d=S.days.find(x=>x.id===dayId); const p=playerById(pid); const card=CARDS[d.course]; const r=computeScore(d,p); const holes=r.holes; const ph=r.ph;
     const tabs = group.length>1 ? `<div class="ptabs">${group.map(id=>{ const q=playerById(id); if(!q) return ""; const rr=computeScore(d,q); return `<button data-ptab="${id}" aria-pressed="${id===pid}"><span class="av">${avatarHtml(q)}</span><b>${esc(q.nick)}</b><small class="num">${rr.n?rr.stb+" pts · thru "+rr.n:"—"}</small></button>`; }).join("")}</div>` : "";
     const mp = (matchIdx!=null && d.id===lastGolfDay()) ? `<button class="btn ghost" id="toMatchPlay">🏆 Match play : qui gagne le trou ?</button>` : "";
-    const tee = Object.keys(card.tees).includes("Yellow")?"Yellow":Object.keys(card.tees)[0];
+    const tee = dayTee(d); const rt=ratingFor(d.course,tee);
     sheet(`<div class="row" style="justify-content:space-between"><h3>${matchIdx!=null?"Partie "+(matchIdx+1):esc(p.nick)} · ${esc(COURSES[d.course].short)}</h3><button class="btn sm ghost" data-close>Fermer</button></div>
       ${tabs}${mp}
       <div class="scsum"><div><b class="num">${r.n?r.gross:"—"}</b><small>Brut</small></div><div><b class="num">${r.n?r.net:"—"}</b><small>Net</small></div><div><b class="num">${r.n?r.stb:"—"}</b><small>Stableford</small></div><div><b class="num">${r.n?fmtToPar(r.toParGross):"—"}</b><small>Brut vs par</small></div></div>
-      <p class="muted small">Handicap ${r.hcpMissing?"<b>manquant</b> (à renseigner dans Jambons → profil)":playerHcp(p)+" · joue "+ph+" coup"+(Math.abs(ph)>1?"s":"")} · ● = coup reçu · distances départs ${({White:"blancs",Yellow:"jaunes",Blue:"bleus",Red:"rouges"})[tee]||tee}</p>
+      <p class="muted small">${r.hcpMissing?"Index <b>manquant</b> (à renseigner dans Jambons → profil) · joue 0":"Index "+playerHcp(p)+" → <b>"+ph+" coup"+(Math.abs(ph)>1?"s":"")+"</b> sur ce parcours"+(rt?" (départs "+(TEE_FR[tee]||tee)+" "+rt.cr+" / "+rt.slope+")":" (sans slope)")} · ● = coup reçu</p>
       <div class="hgrid">${card.par.map((pr,i)=>{ const rec=strokesOnHole(ph,card.si[i]); const g=holes[i]; const pts=g==null?"":Math.max(0,2+pr+rec-g); const cls=g==null?"":g<pr?"under":g>pr?"over":"";
         return `<div class="hrow ${cls}"><span class="hn">${i+1}</span><span class="hi">Par ${pr} · idx ${card.si[i]}<br>${card.tees[tee][i]} m ${"<i></i>".repeat(Math.max(0,rec))}</span><button data-dec="${i}">−</button><span><span class="v ${g==null?"empty":""} num">${g==null?"·":g}</span><div class="pts">${g==null?"":pts+" pt"+(pts>1?"s":"")}</div></span><button data-inc="${i}">+</button></div>`; }).join("")}</div>
       <div class="grid2"><button class="btn ghost" id="fillPar">Pré-remplir les trous vides au par</button><button class="btn ghost" id="clearScore">Effacer la carte</button></div>`);
@@ -1124,6 +1135,7 @@ function renderAdmin(){
   <div class="card"><div class="eyebrow">Journées · parcours, heure de départ, résultat</div>
     ${S.days.map(d=>{const p=dparts(d.id); return `<div class="adm-day" data-day="${d.id}"><div class="t"><b>${p.dow} ${p.d} ${p.mon}</b><select data-f="course" style="width:auto">${courseOpts(d.course)}</select></div>
       <div class="grid2"><div class="field"><label>Heure de départ</label><input data-f="teeTime" type="text" value="${esc(d.teeTime)}" placeholder="ex. 13h30 – 13h50"></div><div class="field"><label>Libellé (pause / note)</label><input data-f="label" value="${esc(d.label||"")}" placeholder="optionnel"></div></div>
+      ${CARDS[d.course]?`<div class="field"><label>Départs joués</label><div class="chips">${Object.keys(CARDS[d.course].tees).map(tee=>`<button class="chip" data-tee="${tee}" aria-pressed="${dayTee(d)===tee}">${TEE_FR[tee]||tee}${ratingFor(d.course,tee)?" · "+ratingFor(d.course,tee).cr+"/"+ratingFor(d.course,tee).slope:""}</button>`).join("")}</div></div>`:""}
       <div class="field"><label>Note du jour (visible par tous)</label><input data-f="note" value="${esc(d.note||"")}" placeholder="ex. voiturettes réservées, départ villa 7h15"></div>
       ${COURSES[d.course]?`<div class="field"><label>Parties (2 ${esc(c.teamA.name)} contre 2 ${esc(c.teamB.name)})</label>
         ${(()=>{ const used=new Set(); (d.matches||[]).forEach(m=>[...(m?.a||[]),...(m?.b||[])].forEach(x=>{ if(x) used.add(x); }));
@@ -1133,6 +1145,10 @@ function renderAdmin(){
       <div class="seg"><button class="A" data-r="A" aria-pressed="${d.result==="A"}">${esc(c.teamA.name)}</button><button class="draw" data-r="draw" aria-pressed="${d.result==="draw"}">Égalité</button><button class="B" data-r="B" aria-pressed="${d.result==="B"}">${esc(c.teamB.name)}</button><button data-r="" aria-pressed="${!d.result}">${(()=>{const s=daySummary(d); return s&&s.done?"Auto (Live "+fmtPts(s.a)+"–"+fmtPts(s.b)+")":"À jouer";})()}</button></div>`:""}
       ${S.photos[d.id]?`<button class="btn sm ghost" data-rmphoto="${d.id}">Retirer la photo du jour</button>`:""}
     </div>`;}).join("")}
+  </div>
+  <div class="card"><div class="eyebrow">Slope & course rating (hommes) · handicap de parcours = index × slope / 113 + (rating − par)</div>
+    ${Object.keys(CARDS).map(k=>`<div class="field"><label>${esc(COURSES[k].short)} · par ${CARDS[k].par.reduce((a,b)=>a+b,0)}</label>${Object.keys(CARDS[k].tees).map(tee=>{ const r=ratingFor(k,tee); return `<div class="grid2" style="grid-template-columns:80px 1fr 1fr;align-items:center;margin-bottom:4px"><span class="small">${TEE_FR[tee]||tee}</span><input data-rt="${k}.${tee}.0" inputmode="decimal" value="${r?r.cr:""}" placeholder="rating"><input data-rt="${k}.${tee}.1" inputmode="numeric" value="${r?r.slope:""}" placeholder="slope"></div>`; }).join("")}</div>`).join("")}
+    <p class="muted small">Pré-rempli : Simola et Goose Valley (valeurs 2026), Pezula / Plettenberg / Knysna GC (feuille GolfRSA 2018). Corrige avec la carte du club si besoin.</p>
   </div>
   <div class="card"><div class="eyebrow">Vols</div>
     ${[["out1","Aller 1"],["out2","Aller 2"],["ret1","Retour 1"],["ret2","Retour 2"]].map(([k,l])=>`<div class="field"><label>${l} · ${esc(c[k].from)} → ${esc(c[k].to)}</label><div class="grid2" style="grid-template-columns:1fr 1fr 1fr"><input data-fl="${k}" data-f="no" value="${esc(c[k].no)}" placeholder="N° vol"><input data-fl="${k}" data-f="dep" value="${esc(c[k].dep)}" placeholder="Départ"><input data-fl="${k}" data-f="arr" value="${esc(c[k].arr)}" placeholder="Arrivée"></div></div>`).join("")}
@@ -1159,6 +1175,7 @@ function renderAdmin(){
   ["shuttle","villaArrival","villaNotes","dress","welcome","format","squabbit"].forEach(id=>$("#"+id).oninput=e=>setCfg(id,e.target.value));
   $("#rate").oninput=e=>{ const v=parseFloat(e.target.value); if(v>0) setCfg("rate",v); };
   root.querySelectorAll("[data-fl]").forEach(i=>i.oninput=e=>setCfg(i.dataset.fl+"."+i.dataset.f,e.target.value));
+  root.querySelectorAll("[data-rt]").forEach(i=>i.oninput=e=>{ const [k,tee,idx]=i.dataset.rt.split("."); S.cfg.ratings=S.cfg.ratings||{}; S.cfg.ratings[k]=S.cfg.ratings[k]||{}; const cur=S.cfg.ratings[k][tee]||(RATINGS[k]||{})[tee]||["",""]; const v=[...cur]; v[+idx]=e.target.value.replace(",","."); S.cfg.ratings[k][tee]=v; cfgSave(); });
   root.querySelectorAll("[data-team]").forEach(b=>b.onclick=()=>{ const p=playerById(b.dataset.team); const n=p.team===""?"A":p.team==="A"?"B":""; p.team=n; save("players/"+p.id,{...p}); renderAdmin(); });
   async function clearMatchesAndLive(){ for(const d of S.days){ if((d.matches||[]).length){ d.matches=[]; await save("days/"+d.id,{...d}); } if(S.live[d.id]){ try{ await S.db.doc("live/"+d.id).delete(); }catch(e){} } } }
   $("#shuffle").onclick=()=>confirmSheet("Tirer les équipes au sort (6 / 6) ? Les parties et les scores Live seront remis à zéro.",async()=>{ const ids=ps.map(p=>p.id).sort(()=>Math.random()-.5); for(const p of ps){ p.team = ids.indexOf(p.id)<6?"A":"B"; await save("players/"+p.id,{...p}); } await clearMatchesAndLive(); renderAdmin(); });
@@ -1166,6 +1183,7 @@ function renderAdmin(){
   root.querySelectorAll(".adm-day").forEach(el=>{ const d=S.days.find(x=>x.id===el.dataset.day); const ds=debounce(()=>save("days/"+d.id,{...d}),500);
     el.querySelectorAll("[data-f]").forEach(i=>i.oninput=e=>{ d[i.dataset.f]=e.target.value; if(i.dataset.f==="course"){ save("days/"+d.id,{...d}); renderAdmin(); } else ds(); });
     el.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ d.result=b.dataset.r; save("days/"+d.id,{...d}); renderAdmin(); });
+    el.querySelectorAll("[data-tee]").forEach(b=>b.onclick=()=>{ d.tee=b.dataset.tee; save("days/"+d.id,{...d}); renderAdmin(); });
     el.querySelectorAll("select[data-m]").forEach(s=>s.onchange=()=>{ const ms=[0,1,2].map(i=>(d.matches||[])[i]||{a:["",""],b:["",""]}); const m=ms[+s.dataset.m]; m[s.dataset.side]=[...(m[s.dataset.side]||["",""])]; m[s.dataset.side][+s.dataset.k]=s.value; d.matches=ms; save("days/"+d.id,{...d}); renderAdmin(); const el2=document.querySelector(`.adm-day[data-day="${d.id}"]`); if(el2) el2.scrollIntoView({block:"nearest"}); });
     el.querySelectorAll("[data-shufflematches]").forEach(b=>b.onclick=()=>{ const r=smartDraw(d.id); if(!r) return toast("Il faut 6 joueurs par équipe"); d.matches=r; save("days/"+d.id,{...d}); renderAdmin(); toast("Parties tirées : chacun joue avec un maximum de copains différents"); });
     el.querySelectorAll("[data-rmphoto]").forEach(b=>b.onclick=()=>confirmSheet("Retirer la photo de cette journée ?",async()=>{ await S.db.doc("photos/"+d.id).delete(); toast("Photo retirée"); })); });
@@ -1232,7 +1250,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-010042";
+const BUILD="20261031-011349";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
