@@ -525,6 +525,8 @@ const RATINGS = {
   knysna:{White:[69.3,130],Blue:[70.9,134],Red:[66.8,124]}
 };
 const TEE_FR = {Black:"noirs",Yellow:"jaunes",White:"blancs",Blue:"bleus",Red:"rouges"};
+const TEE_OVERRIDES = {"2026-10-31":{carlo:"Blue"}}; // départs particuliers décidés par Brad
+function playerTee(d,pid){ const card=CARDS[d.course]; if(!card) return ""; const s=S.scores[d.id+"_"+pid]; const o=(TEE_OVERRIDES[d.id]||{})[pid]; const tee=(s&&s.tee)||o; return (tee && Object.keys(card.tees).includes(tee)) ? tee : dayTee(d); }
 function dayTee(d){ const card=CARDS[d.course]; if(!card) return ""; const tees=Object.keys(card.tees); return (d.tee && tees.includes(d.tee)) ? d.tee : (tees.includes("White")?"White":tees[0]); }
 function ratingFor(course,tee){ const o=((S.cfg.ratings||{})[course]||{})[tee] || (RATINGS[course]||{})[tee]; if(!o) return null; const cr=parseFloat(o[0]), sl=parseFloat(o[1]); return (cr>0&&sl>0)?{cr,slope:sl}:null; }
 const VILLA = {name:"Cloud 9 Villa", estate:"Pezula Golf Estate", addr:"Welbedacht Lane, Rexford, Knysna 6571", phone:"+27 83 459 4540", maps:"Cloud+9+Estate+Welbedacht+Lane+Rexford+Knysna"};
@@ -979,7 +981,7 @@ function openLiveMatch(dayId,i){
 
 // ---------- Scores individuels (brut / net / stableford / stroke) ----------
 function playerHcp(p){ const v=parseFloat(String((S.profiles[p.id]||{}).hcp||"").replace(",",".")); return isNaN(v)?null:v; }
-function playingHcp(p,d){ const h=playerHcp(p); if(h===null) return 0; if(!d||!CARDS[d.course]) return Math.round(h); const r=ratingFor(d.course,dayTee(d)); if(!r) return Math.round(h); const par=CARDS[d.course].par.reduce((a,b)=>a+b,0); return Math.round(h*r.slope/113 + (r.cr-par)); }
+function playingHcp(p,d){ const h=playerHcp(p); if(h===null) return 0; if(!d||!CARDS[d.course]) return Math.round(h); const r=ratingFor(d.course,playerTee(d,p.id)); if(!r) return Math.round(h); const par=CARDS[d.course].par.reduce((a,b)=>a+b,0); return Math.round(h*r.slope/113 + (r.cr-par)); }
 function strokesOnHole(ph, si){ // coups reçus sur un trou selon l'index
   if(ph>=0){ const base=Math.floor(ph/18), extra=ph%18; return base + (si<=extra?1:0); }
   const give=-ph; const base=Math.floor(give/18), extra=give%18; return -(base + (si>18-extra?1:0)); }
@@ -1020,22 +1022,24 @@ function openScoreSheet(dayId,pid,group,matchIdx){
   const draw=()=>{ const d=S.days.find(x=>x.id===dayId); const p=playerById(pid); const card=CARDS[d.course]; const r=computeScore(d,p); const holes=r.holes; const ph=r.ph;
     const tabs = group.length>1 ? `<div class="ptabs">${group.map(id=>{ const q=playerById(id); if(!q) return ""; const rr=computeScore(d,q); return `<button data-ptab="${id}" aria-pressed="${id===pid}"><span class="av">${avatarHtml(q)}</span><b>${esc(q.nick)}</b><small class="num">${rr.n?rr.stb+" pts · thru "+rr.n:"—"}</small></button>`; }).join("")}</div>` : "";
     const mp = (matchIdx!=null && d.id===lastGolfDay()) ? `<button class="btn ghost" id="toMatchPlay">🏆 Match play : qui gagne le trou ?</button>` : "";
-    const tee = dayTee(d); const rt=ratingFor(d.course,tee);
+    const tee = playerTee(d,pid); const rt=ratingFor(d.course,tee);
+    const teeChips = `<div class="chips" style="margin:6px 0">${Object.keys(card.tees).map(k=>`<button class="chip" data-stee="${k}" aria-pressed="${k===tee}">${TEE_FR[k]||k}</button>`).join("")}</div>`;
     sheet(`<div class="row" style="justify-content:space-between"><h3>${matchIdx!=null?"Partie "+(matchIdx+1):esc(p.nick)} · ${esc(COURSES[d.course].short)}</h3><button class="btn sm ghost" data-close>Fermer</button></div>
       ${tabs}${mp}
       <div class="scsum"><div><b class="num">${r.n?r.gross:"—"}</b><small>Brut</small></div><div><b class="num">${r.n?r.net:"—"}</b><small>Net</small></div><div><b class="num">${r.n?r.stb:"—"}</b><small>Stableford</small></div><div><b class="num">${r.n?fmtToPar(r.toParGross):"—"}</b><small>Brut vs par</small></div></div>
-      <p class="muted small">${r.hcpMissing?"Index <b>manquant</b> (à renseigner dans Jambons → profil) · joue 0":"Index "+playerHcp(p)+" → <b>"+ph+" coup"+(Math.abs(ph)>1?"s":"")+"</b> sur ce parcours"+(rt?" (départs "+(TEE_FR[tee]||tee)+" "+rt.cr+" / "+rt.slope+")":" (sans slope)")} · ● = coup reçu</p>
+      <p class="muted small">${r.hcpMissing?"Index <b>manquant</b> (à renseigner dans Jambons → profil) · joue 0":"Index "+playerHcp(p)+" → <b>"+ph+" coup"+(Math.abs(ph)>1?"s":"")+"</b> sur ce parcours"+(rt?" (départs "+(TEE_FR[tee]||tee)+" "+rt.cr+" / "+rt.slope+")":" (sans slope)")} · ● = coup reçu</p>${teeChips}
       <div class="hgrid">${card.par.map((pr,i)=>{ const rec=strokesOnHole(ph,card.si[i]); const g=holes[i]; const pts=g==null?"":Math.max(0,2+pr+rec-g); const cls=g==null?"":g<pr?"under":g>pr?"over":"";
         return `<div class="hrow ${cls}"><span class="hn">${i+1}</span><span class="hi">Par ${pr} · idx ${card.si[i]}<br>${card.tees[tee][i]} m ${"<i></i>".repeat(Math.max(0,rec))}</span><button data-dec="${i}">−</button><span><span class="v ${g==null?"empty":""} num">${g==null?"·":g}</span><div class="pts">${g==null?"":pts+" pt"+(pts>1?"s":"")}</div></span><button data-inc="${i}">+</button></div>`; }).join("")}</div>
       <div class="grid2"><button class="btn ghost" id="fillPar">Pré-remplir les trous vides au par</button><button class="btn ghost" id="clearScore">Effacer la carte</button></div>`);
-    const write=(arr)=>{ const key="live/score_"+dayId+"_"+pid; const prev=scoreWriteQ[key]||Promise.resolve(); scoreWriteQ[key]=prev.then(()=>S.db.doc(key).set({holes:arr.map(v=>v==null?null:v), player:pid, day:dayId, by:S.uid||"", ts:Date.now()})).catch(e=>{ console.error(e); toast("Enregistrement refusé"); }); };
+    const write=(arr,tee2)=>{ const key="live/score_"+dayId+"_"+pid; const cur=S.scores[scoreKey(dayId,pid)]||{}; const teeV=tee2||cur.tee||""; S.scores[scoreKey(dayId,pid)]={...cur,holes:arr,tee:teeV}; const prev=scoreWriteQ[key]||Promise.resolve(); scoreWriteQ[key]=prev.then(()=>S.db.doc(key).set({holes:arr.map(v=>v==null?null:v), tee:teeV, player:pid, day:dayId, by:S.uid||"", ts:Date.now()})).catch(e=>{ console.error(e); toast("Enregistrement refusé"); }); };
     const upd=(i,delta)=>{ const arr=holes.slice(); const pr=card.par[i]; let v=arr[i]==null?pr:arr[i]; v=Math.max(1,Math.min(15,v+delta)); if(arr[i]==null && delta===0) v=pr; arr[i]=v; S.scores[scoreKey(dayId,pid)]={...(S.scores[scoreKey(dayId,pid)]||{}),holes:arr}; write(arr); draw(); };
     $("#sheet").querySelectorAll("[data-ptab]").forEach(b=>b.onclick=()=>{ pid=b.dataset.ptab; draw(); });
+    $("#sheet").querySelectorAll("[data-stee]").forEach(b=>b.onclick=()=>{ write(holes.slice(), b.dataset.stee); draw(); toast("Départs "+(TEE_FR[b.dataset.stee]||b.dataset.stee)+" pour "+p.nick); });
     const tmp=$("#toMatchPlay"); if(tmp) tmp.onclick=()=>openLiveMatch(dayId,matchIdx);
     $("#sheet").querySelectorAll("[data-inc]").forEach(b=>b.onclick=()=>upd(+b.dataset.inc, holes[+b.dataset.inc]==null?0:1));
     $("#sheet").querySelectorAll("[data-dec]").forEach(b=>b.onclick=()=>upd(+b.dataset.dec, holes[+b.dataset.dec]==null?0:-1));
     $("#fillPar").onclick=()=>{ const arr=holes.map((v,i)=>v==null?card.par[i]:v); S.scores[scoreKey(dayId,pid)]={holes:arr}; write(arr); draw(); };
-    $("#clearScore").onclick=()=>confirmSheet("Effacer toute la carte de "+p.nick+" ?",async()=>{ S.scores[scoreKey(dayId,pid)]={holes:[]}; write(Array(18).fill(null)); openScoreSheet(dayId,pid,group,matchIdx); });
+    $("#clearScore").onclick=()=>confirmSheet("Effacer toute la carte de "+p.nick+" ?",async()=>{ write(Array(18).fill(null)); openScoreSheet(dayId,pid,group,matchIdx); });
     scoreSheet={dayId,pid,redraw:draw};
   };
   draw();
@@ -1250,7 +1254,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-011349";
+const BUILD="20261031-012401";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
