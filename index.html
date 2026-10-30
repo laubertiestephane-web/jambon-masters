@@ -244,6 +244,32 @@ img{max-width:100%}
 .wx .row{gap:6px}
 .wxday{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding-top:10px;margin-top:10px;border-top:1px solid var(--line)}
 .wxday .ico{width:40px;height:40px}
+/* Scores */
+.rank{display:grid;grid-template-columns:28px 1fr auto auto;gap:8px 10px;align-items:center}
+.rank .pos{font-family:var(--display);color:var(--muted)}
+.rank .pos.top{color:var(--pink)}
+.rank .val{font-family:var(--display);font-size:1.15rem}
+.rank .thru{font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;min-width:52px;text-align:right}
+.rank .nm b{display:block}.rank .nm small{color:var(--muted)}
+.plist{display:grid;gap:6px}
+.plist button{display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;background:var(--surface2);text-align:left;font-weight:700}
+.plist .av{width:36px;height:36px;border-radius:50%;overflow:hidden;background:var(--surface);display:grid;place-content:center;font-family:var(--display);font-size:.8rem;color:var(--pink)}
+.plist .av svg,.plist .av img{width:100%;height:100%;object-fit:cover}
+.plist .tot{font-family:var(--display);font-size:1rem}
+.hgrid{display:grid;gap:6px}
+.hrow{display:grid;grid-template-columns:34px 1fr 36px 1fr 36px;gap:6px;align-items:center;background:var(--surface2);border-radius:10px;padding:4px 6px}
+.hrow .hn{font-family:var(--display);font-size:1rem;text-align:center}
+.hrow .hi{font-size:.68rem;color:var(--muted);font-weight:700;line-height:1.1}
+.hrow .hi i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pink);margin-left:2px}
+.hrow .v{font-family:var(--display);font-size:1.25rem;text-align:center}
+.hrow .v.empty{color:var(--muted);font-size:.9rem}
+.hrow button{width:36px;height:36px;border-radius:9px;background:var(--surface);font-weight:900;font-size:1.2rem;box-shadow:var(--shadow)}
+.hrow .pts{font-size:.72rem;color:var(--muted);text-align:center;font-weight:800}
+.hrow.under .v{color:var(--ok)}.hrow.over .v{color:var(--pink)}
+.scsum{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.scsum div{background:var(--surface2);border-radius:10px;padding:6px 4px}
+.scsum b{display:block;font-family:var(--display);font-size:1.1rem}
+.scsum small{font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800}
 .adminlink{display:block;text-align:center;color:var(--muted);font-size:.75rem;margin-top:18px;text-decoration:underline;background:none}
 </style>
 </head>
@@ -263,6 +289,7 @@ img{max-width:100%}
 
   <section id="p-home" role="tabpanel"></section>
   <section id="p-live" role="tabpanel" hidden></section>
+  <section id="p-scores" role="tabpanel" hidden></section>
   <section id="p-trip" role="tabpanel" hidden></section>
   <section id="p-courses" role="tabpanel" hidden></section>
   <section id="p-board" role="tabpanel" hidden></section>
@@ -480,12 +507,14 @@ const DEFAULT_CFG = {
   villaNotes:"9 nuits · ménage quotidien inclus · Thomas V. nous rejoint à Joburg pour le vol vers George."
 };
 const GEO = { knysnaTown:{lat:-34.036,lon:23.047,name:"Knysna"}, pezula:{lat:-34.058,lon:23.085}, simola:{lat:-33.995,lon:23.035}, plettenberg:{lat:-34.045,lon:23.357}, goose:{lat:-34.033,lon:23.395}, knysna:{lat:-34.049,lon:23.068} };
+// Cartes de score (par, index, distances en mètres par départ) — source golfpass
+const CARDS = {"simola":{"par":[5,4,4,4,4,3,5,4,3,4,3,5,4,3,5,4,3,5],"si":[9,17,7,5,3,1,15,13,11,6,4,16,2,18,12,8,10,14],"tees":{"Yellow":[508,338,367,390,374,203,465,380,197,393,201,458,394,182,522,404,157,468],"White":[486,338,334,335,360,183,431,356,156,378,175,436,384,152,485,364,146,444],"Blue":[436,321,321,288,320,172,431,340,148,361,168,412,326,127,402,360,106,424],"Red":[385,284,299,232,264,170,348,226,124,332,133,400,287,127,333,360,100,415]}},"pezula":{"par":[5,4,3,4,3,4,4,4,5,4,3,4,5,4,3,4,4,5],"si":[1,5,15,13,11,7,3,9,17,8,18,4,12,10,16,2,14,6],"tees":{"Black":[532,407,169,340,194,395,433,379,435,362,167,433,524,290,170,365,293,487],"Yellow":[514,380,153,314,175,371,409,357,427,341,143,406,491,277,139,311,268,460],"White":[501,359,131,291,171,344,389,335,403,322,129,371,489,245,131,291,244,438],"Blue":[477,334,113,270,159,317,336,312,367,306,111,326,463,231,113,272,227,414],"Red":[404,317,97,244,150,287,323,280,322,285,74,305,439,227,104,242,199,330]}},"plettenberg":{"par":[4,4,4,5,4,3,5,3,4,4,3,4,3,4,5,4,4,5],"si":[17,3,9,13,1,7,15,5,11,10,18,4,8,14,12,2,6,16],"tees":{"Yellow":[340,383,344,515,370,164,444,180,339,354,122,377,174,309,501,361,347,477],"White":[322,368,339,481,367,149,419,175,323,341,117,362,159,299,465,325,336,465],"Blue":[306,359,326,438,357,144,414,165,317,322,107,334,154,277,444,310,327,423],"Red":[287,350,290,424,346,132,403,155,270,313,102,325,144,242,401,294,287,380]}},"goose":{"par":[4,3,4,4,3,4,5,5,4,4,3,4,3,5,4,5,4,4],"si":[3,7,15,5,17,9,1,13,11,4,14,6,8,12,2,10,18,16],"tees":{"Yellow":[368,188,315,302,140,330,518,461,335,390,152,353,193,471,401,463,310,323],"White":[346,172,304,299,116,320,490,459,286,386,143,337,163,468,398,449,286,321],"Blue":[321,158,289,279,116,295,447,431,282,360,135,318,144,450,371,416,272,289],"Red":[307,143,254,262,90,274,425,397,240,311,129,270,135,360,343,387,260,260]}},"knysna":{"par":[4,3,5,4,4,4,4,3,5,4,4,3,5,3,4,5,4,4],"si":[7,9,15,3,13,1,17,11,5,8,2,10,4,18,16,6,12,14],"tees":{"White":[318,161,448,338,323,371,262,148,444,332,367,175,460,130,310,505,336,324],"Blue":[302,153,412,307,323,346,237,132,419,297,348,165,438,123,310,443,297,299],"Red":[269,145,398,289,287,299,213,105,373,297,306,156,405,123,267,414,283,299]}}};
 const VILLA = {name:"Cloud 9 Villa", estate:"Pezula Golf Estate", addr:"Welbedacht Lane, Rexford, Knysna 6571", phone:"+27 83 459 4540", maps:"Cloud+9+Estate+Welbedacht+Lane+Rexford+Knysna"};
 const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, Knysna Rd, George 6530", maps:"Shop+55+Eden+Meander+Lifestyle+Centre+Knysna+Rd+George+6530"};
 
 // ---------- État ----------
 const S = { tab:"home", cfg:{...DEFAULT_CFG}, players:DEFAULT_PLAYERS.slice(), days:DEFAULT_DAYS.slice(), photos:{}, profiles:{}, expenses:[], settled:{}, admins:[], adminRequests:[],
-  db:null, user:null, assets:null, wall:[], wx:{}, live:{}, liveDay:"", fx:{rate:2.84, live:false, date:"", mur:"", zar:""}, me:"", greeted:false, isOwner:false, canWrite:null, uid:null, dbReady:false };
+  db:null, user:null, assets:null, wall:[], wx:{}, live:{}, liveDay:"", scores:{}, scoreDay:"", rankMode:"stableford", rankScope:"day", fx:{rate:2.84, live:false, date:"", mur:"", zar:""}, me:"", greeted:false, isOwner:false, canWrite:null, uid:null, dbReady:false };
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -530,6 +559,7 @@ S.assets = { upload: async b => { const id=await dataURL(b); return {id, url:id,
 
 // ---------- Icônes ----------
 const I = {
+  score:'<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
   live:'<svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>',
   home:'<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>',
   plane:'<svg viewBox="0 0 24 24"><path d="M2 16l20-6-6 10-3-6-11 2zM22 10l-8-8-1 7"/></svg>',
@@ -614,7 +644,7 @@ function weatherCard(){
 }
 
 // ---------- Onglets ----------
-const TABS = [["home","Accueil",I.home],["live","Live",I.live],["trip","Voyage",I.plane],["courses","Parcours",I.flag],["board","Classement",I.trophy],["wall","Mur",I.cam],["people","Jambons",I.people],["money","Frais",I.money]];
+const TABS = [["home","Accueil",I.home],["live","Live",I.live],["scores","Scores",I.score],["trip","Voyage",I.plane],["courses","Parcours",I.flag],["board","Classement",I.trophy],["wall","Mur",I.cam],["people","Jambons",I.people],["money","Frais",I.money]];
 function renderTabs(){
   const list = S.isOwner ? [...TABS,["admin","Réglages",I.gear]] : TABS;
   $("#tabbar").innerHTML = list.map(([id,l,ic])=>`<button class="tab" role="tab" id="tab-${id}" aria-selected="${S.tab===id}" aria-controls="p-${id}">${ic}<span>${l}</span></button>`).join("");
@@ -623,7 +653,7 @@ function renderTabs(){
 function setTab(id){ S.tab=id; try{localStorage.setItem("jm.tab",id)}catch{} ; document.querySelectorAll('section[role="tabpanel"]').forEach(s=>s.hidden = s.id!=="p-"+id); renderTabs(); render(); window.scrollTo({top:0}); }
 
 // ---------- Rendu ----------
-function render(){ renderHeader(); ({home:renderHome,live:renderLive,trip:renderTrip,courses:renderCourses,board:renderBoard,wall:renderWall,people:renderPeople,money:renderMoney,admin:renderAdmin}[S.tab]||renderHome)(); }
+function render(){ renderHeader(); ({home:renderHome,live:renderLive,scores:renderScores,trip:renderTrip,courses:renderCourses,board:renderBoard,wall:renderWall,people:renderPeople,money:renderMoney,admin:renderAdmin}[S.tab]||renderHome)(); }
 
 function photoBlock(d, cls=""){
   const ph = S.photos[d.id];
@@ -650,7 +680,7 @@ function renderHome(){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><a class="btn" href="${mapsUrl(c.maps)}" target="_blank" rel="noopener">${I.pin} Itinéraire</a><a class="btn" href="tel:${c.phone.replace(/\s/g,"")}">${I.phone} Club-house</a></div>`:""}
       ${cur.note?`<p>${esc(cur.note)}</p>`:""}
       ${matchesHtml(cur)}
-      ${c?`<button class="btn primary" id="goLive">📡 Suivre les parties en direct</button>`:""}
+      ${c?`<div class="grid2"><button class="btn primary" id="goLive">📡 Parties en direct</button><button class="btn" id="goScores">📝 Saisir mes scores</button></div>`:""}
       ${S.cfg.squabbit?`<a class="btn ghost" href="${esc(S.cfg.squabbit)}" target="_blank" rel="noopener">🐰 Scores du jour sur Squabbit</a>`:""}
       ${photoBlock(cur)}
     </div>`;
@@ -677,7 +707,7 @@ function renderHome(){
   ${!S.dbReady ? `<p class="muted small" style="text-align:center">Connexion…</p>`:""}
   ${S.isOwner?"":`<button class="adminlink" id="adminLogin">Connexion organisateur</button>`}`;
   $("#p-home").innerHTML = html; bindPhotos($("#p-home"));
-  bindInstall(); const gl=$("#goLive"); if(gl) gl.onclick=()=>setTab("live"); const pm=$("#pickMe"); if(pm) pm.onclick=openPickMe; const al=$("#adminLogin"); if(al) al.onclick=adminLogin;
+  bindInstall(); const gl=$("#goLive"); if(gl) gl.onclick=()=>setTab("live"); const gs=$("#goScores"); if(gs) gs.onclick=()=>setTab("scores"); const pm=$("#pickMe"); if(pm) pm.onclick=openPickMe; const al=$("#adminLogin"); if(al) al.onclick=adminLogin;
 }
 
 function flightRow(f){ return `<div class="flight"><span class="t num">${esc(f.dep)} → ${esc(f.arr)}</span><div><span class="cities">${esc(f.from)} → ${esc(f.to)}</span><br><span class="muted small">${f.no?esc(f.no)+" · ":"<i>n° de vol à confirmer</i> · "}${esc(f.date)}${f.note?" · "+esc(f.note):""}</span></div></div>`; }
@@ -904,6 +934,72 @@ function openLiveMatch(dayId,i){
 }
 // quand la base change, redessiner la feuille ouverte
 
+// ---------- Scores individuels (brut / net / stableford / stroke) ----------
+function playerHcp(p){ const v=parseFloat(String((S.profiles[p.id]||{}).hcp||"").replace(",",".")); return isNaN(v)?null:v; }
+function playingHcp(p){ const h=playerHcp(p); return h===null?0:Math.round(h); }
+function strokesOnHole(ph, si){ // coups reçus sur un trou selon l'index
+  if(ph>=0){ const base=Math.floor(ph/18), extra=ph%18; return base + (si<=extra?1:0); }
+  const give=-ph; const base=Math.floor(give/18), extra=give%18; return -(base + (si>18-extra?1:0)); }
+function scoreKey(dayId,pid){ return dayId+"_"+pid; }
+function holesOf(dayId,pid){ const s=S.scores[scoreKey(dayId,pid)]; const h=(s&&s.holes)||[]; return Array.from({length:18},(_,i)=>(h[i]==null||h[i]===""?null:+h[i])); }
+function computeScore(d,p){ const card=CARDS[d.course]; const holes=holesOf(d.id,p.id); const ph=playingHcp(p); let gross=0,net=0,stb=0,par=0,n=0;
+  holes.forEach((g,i)=>{ if(g==null) return; const pr=card.par[i], rec=strokesOnHole(ph,card.si[i]); n++; gross+=g; par+=pr; net+=g-rec; stb+=Math.max(0, 2+pr+rec-g); });
+  return {holes,gross,net,stb,par,n,ph,toParGross:gross-par,toParNet:net-par,complete:n===18,hcpMissing:playerHcp(p)===null}; }
+function fmtToPar(v){ return v===0?"E":(v>0?"+"+v:String(v)); }
+function renderScores(){
+  const gd=golfDays(); if(!S.scoreDay || !gd.some(d=>d.id===S.scoreDay)) S.scoreDay=defaultLiveDay();
+  const d=S.days.find(x=>x.id===S.scoreDay); const can=!!S.uid && !!S.db; const ps=S.players.slice().sort((a,b)=>a.order-b.order);
+  if(!d||!CARDS[d.course]){ $("#p-scores").innerHTML=`<div class="card"><p class="muted">Pas de carte de score pour cette journée.</p></div>`; return; }
+  const mode=S.rankMode, scope=S.rankScope;
+  // classement
+  let rows=[];
+  if(scope==="day"){ rows=ps.map(p=>({p,...computeScore(d,p)})).filter(r=>r.n>0); }
+  else { rows=ps.map(p=>{ let gross=0,net=0,stb=0,par=0,days=0,n=0; for(const dd of gd){ if(!CARDS[dd.course]) continue; const r=computeScore(dd,p); if(r.n){ gross+=r.gross; net+=r.net; stb+=r.stb; par+=r.par; n+=r.n; days++; } } return {p,gross,net,stb,par,n,days,toParGross:gross-par,toParNet:net-par,complete:true,hcpMissing:playerHcp(p)===null}; }).filter(r=>r.n>0); }
+  const val=r=> mode==="gross"?r.gross : mode==="net"?r.net : mode==="stableford"?r.stb : r.toParNet;
+  const asc = mode!=="stableford";
+  rows.sort((a,b)=> asc? val(a)-val(b) : val(b)-val(a));
+  const label=r=> mode==="gross"?`${r.gross} <small class="muted">(${fmtToPar(r.toParGross)})</small>` : mode==="net"?`${r.net} <small class="muted">(${fmtToPar(r.toParNet)})</small>` : mode==="stableford"?`${r.stb} <small class="muted">pts</small>` : fmtToPar(r.toParNet);
+  const thru=r=> scope==="day" ? (r.complete?"18 trous":"thru "+r.n) : (r.days+" j · "+r.n+" trous");
+  const card=CARDS[d.course]; const p0=dparts(d.id);
+  $("#p-scores").innerHTML = `
+  <div class="daychips">${gd.map(x=>`<button class="chip" data-sday="${x.id}" aria-pressed="${x.id===d.id}">${dparts(x.id).dow} ${dparts(x.id).d} · ${COURSES[x.course].short}</button>`).join("")}</div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><div><div class="eyebrow">Classement</div><h2>${scope==="day"?esc(COURSES[d.course].short)+" · "+p0.dow+" "+p0.d:"Semaine"}</h2></div>
+      <div class="seg" style="min-width:150px"><button data-scope="day" aria-pressed="${scope==="day"}">Journée</button><button data-scope="week" aria-pressed="${scope==="week"}">Semaine</button></div></div>
+    <div class="chips">${[["gross","Brut"],["net","Net"],["stableford","Stableford"],["stroke","Stroke"]].map(([k,l])=>`<button class="chip" data-mode="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</div>
+    ${rows.length?`<div class="rank">${rows.map((r,i)=>`<span class="pos ${i<3?"top":""}">${i+1}</span><span class="nm"><b>${esc(r.p.nick)}</b><small>hcp ${r.hcpMissing?"<i>manquant</i>":playerHcp(r.p)}${scope==="day"?" · joue "+r.ph:""}</small></span><span class="val num">${label(r)}</span><span class="thru">${thru(r)}</span>`).join("")}</div>`:`<p class="muted">Aucun score saisi${scope==="day"?" pour cette journée":""}.</p>`}
+    <p class="muted small">${mode==="stableford"?"Points par trou avec coups reçus selon l'index du trou et le handicap de jeu (arrondi).":mode==="net"?"Coups bruts moins les coups reçus trou par trou.":mode==="gross"?"Total des coups, sans handicap.":"Différentiel net par rapport au par, cumulé sur les journées jouées."}</p>
+  </div>
+  <div class="card"><div class="eyebrow">Saisir les scores · ${esc(COURSES[d.course].name)} · par ${card.par.reduce((a,b)=>a+b,0)}</div>
+    <div class="plist">${ps.map(p=>{ const r=computeScore(d,p); return `<button data-score="${p.id}" ${can?"":"disabled"}><span class="av">${avatarHtml(p)}</span><span>${esc(p.nick)}<br><small class="muted">${r.n?`${r.n} trou${r.n>1?"s":""} · brut ${r.gross} · net ${r.net} · ${r.stb} pts`:"pas encore de score"}</small></span><span class="tot num">${r.n?fmtToPar(r.toParGross):"—"}</span></button>`; }).join("")}</div>
+    <p class="muted small">Chacun peut saisir ses coups ou ceux de ses partenaires de partie. Le handicap vient de la fiche Jambon de chaque joueur.</p>
+  </div>`;
+  $("#p-scores").querySelectorAll("[data-sday]").forEach(b=>b.onclick=()=>{ S.scoreDay=b.dataset.sday; renderScores(); });
+  $("#p-scores").querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{ S.rankMode=b.dataset.mode; renderScores(); });
+  $("#p-scores").querySelectorAll("[data-scope]").forEach(b=>b.onclick=()=>{ S.rankScope=b.dataset.scope; renderScores(); });
+  $("#p-scores").querySelectorAll("[data-score]").forEach(b=>b.onclick=()=>openScoreSheet(d.id,b.dataset.score));
+}
+let scoreSheet=null; const scoreWriteQ={};
+function openScoreSheet(dayId,pid){
+  const draw=()=>{ const d=S.days.find(x=>x.id===dayId); const p=playerById(pid); const card=CARDS[d.course]; const r=computeScore(d,p); const holes=r.holes; const ph=r.ph;
+    const tee = Object.keys(card.tees).includes("White")?"White":Object.keys(card.tees)[0];
+    sheet(`<div class="row" style="justify-content:space-between"><h3>${esc(p.nick)} · ${esc(COURSES[d.course].short)}</h3><button class="btn sm ghost" data-close>Fermer</button></div>
+      <div class="scsum"><div><b class="num">${r.n?r.gross:"—"}</b><small>Brut</small></div><div><b class="num">${r.n?r.net:"—"}</b><small>Net</small></div><div><b class="num">${r.n?r.stb:"—"}</b><small>Stableford</small></div><div><b class="num">${r.n?fmtToPar(r.toParGross):"—"}</b><small>vs par</small></div></div>
+      <p class="muted small">Handicap ${r.hcpMissing?"<b>manquant</b> (à renseigner dans Jambons → profil)":playerHcp(p)+" · joue "+ph+" coup"+(Math.abs(ph)>1?"s":"")} · ● = coup reçu · distances départs ${({White:"blancs",Yellow:"jaunes",Blue:"bleus",Red:"rouges"})[tee]||tee}</p>
+      <div class="hgrid">${card.par.map((pr,i)=>{ const rec=strokesOnHole(ph,card.si[i]); const g=holes[i]; const pts=g==null?"":Math.max(0,2+pr+rec-g); const cls=g==null?"":g<pr?"under":g>pr?"over":"";
+        return `<div class="hrow ${cls}"><span class="hn">${i+1}</span><span class="hi">Par ${pr} · idx ${card.si[i]}<br>${card.tees[tee][i]} m ${"<i></i>".repeat(Math.max(0,rec))}</span><button data-dec="${i}">−</button><span><span class="v ${g==null?"empty":""} num">${g==null?"·":g}</span><div class="pts">${g==null?"":pts+" pt"+(pts>1?"s":"")}</div></span><button data-inc="${i}">+</button></div>`; }).join("")}</div>
+      <div class="grid2"><button class="btn ghost" id="fillPar">Pré-remplir les trous vides au par</button><button class="btn ghost" id="clearScore">Effacer la carte</button></div>`);
+    const write=(arr)=>{ const key="live/score_"+dayId+"_"+pid; const prev=scoreWriteQ[key]||Promise.resolve(); scoreWriteQ[key]=prev.then(()=>S.db.doc(key).set({holes:arr.map(v=>v==null?null:v), player:pid, day:dayId, by:S.uid||"", ts:Date.now()})).catch(e=>{ console.error(e); toast("Enregistrement refusé"); }); };
+    const upd=(i,delta)=>{ const arr=holes.slice(); const pr=card.par[i]; let v=arr[i]==null?pr:arr[i]; v=Math.max(1,Math.min(15,v+delta)); if(arr[i]==null && delta===0) v=pr; arr[i]=v; S.scores[scoreKey(dayId,pid)]={...(S.scores[scoreKey(dayId,pid)]||{}),holes:arr}; write(arr); draw(); };
+    $("#sheet").querySelectorAll("[data-inc]").forEach(b=>b.onclick=()=>upd(+b.dataset.inc, holes[+b.dataset.inc]==null?0:1));
+    $("#sheet").querySelectorAll("[data-dec]").forEach(b=>b.onclick=()=>upd(+b.dataset.dec, holes[+b.dataset.dec]==null?0:-1));
+    $("#fillPar").onclick=()=>{ const arr=holes.map((v,i)=>v==null?card.par[i]:v); S.scores[scoreKey(dayId,pid)]={holes:arr}; write(arr); draw(); };
+    $("#clearScore").onclick=()=>confirmSheet("Effacer toute la carte de "+p.nick+" ?",async()=>{ S.scores[scoreKey(dayId,pid)]={holes:[]}; write(Array(18).fill(null)); openScoreSheet(dayId,pid); });
+    scoreSheet={dayId,pid,redraw:draw};
+  };
+  draw();
+}
+
 // ---------- Frais ----------
 function computeBalances(){
   const bal={}; S.players.forEach(p=>bal[p.id]=0);
@@ -973,7 +1069,7 @@ function shrink(file,max){ return new Promise((res,rej)=>{ const img=new Image()
 
 // ---------- Feuilles (dialogues) ----------
 function sheet(html){ closeSheet(); const d=document.createElement("div"); d.className="sheet"; d.id="sheet"; d.innerHTML=`<div class="in">${html}</div>`; d.onclick=e=>{ if(e.target===d) closeSheet(); }; document.body.appendChild(d); d.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheet); }
-function closeSheet(){ $("#sheet")?.remove(); liveSheet=null; }
+function closeSheet(){ $("#sheet")?.remove(); liveSheet=null; scoreSheet=null; }
 function confirmSheet(q,fn){ sheet(`<h3>${esc(q)}</h3><div class="grid2"><button class="btn ghost" data-close>Non</button><button class="btn primary" id="yes">Oui</button></div>`); $("#yes").onclick=async()=>{ closeSheet(); await fn(); }; }
 
 // ---------- Admin ----------
@@ -1094,7 +1190,7 @@ function startSubs(db){ if(subsStarted) return; subsStarted=true;
   sub(db.collection("profiles"), s=>{ S.profiles={}; s.docs.forEach(x=>S.profiles[x.id]=x.data()); });
   sub(db.collection("expenses"), s=>{ S.expenses = s.docs.map(x=>({...x.data(), id:x.id})); });
   sub(db.collection("wall"), s=>{ S.wall = s.docs.map(x=>({...x.data(), id:x.id})); });
-  sub(db.collection("live"), s=>{ S.live={}; s.docs.forEach(x=>S.live[x.id]=x.data()); if(liveSheet && liveSheet.redraw && $("#sheet")) liveSheet.redraw(); });
+  sub(db.collection("live"), s=>{ S.live={}; S.scores={}; s.docs.forEach(x=>{ if(x.id.startsWith("score_")){ S.scores[x.id.slice(6)]=x.data(); } else S.live[x.id]=x.data(); }); if(scoreSheet && scoreSheet.redraw && $("#sheet")) scoreSheet.redraw(); if(liveSheet && liveSheet.redraw && $("#sheet")) liveSheet.redraw(); });
 }
 async function seedIfEmpty(db){
   try{ const ps=await db.collection("players").get(); if(!ps.empty) return;
@@ -1106,7 +1202,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261028-222331";
+const BUILD="20261030-153112";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
