@@ -982,7 +982,7 @@ function renderScores(){
 let scoreSheet=null; const scoreWriteQ={};
 function openScoreSheet(dayId,pid){
   const draw=()=>{ const d=S.days.find(x=>x.id===dayId); const p=playerById(pid); const card=CARDS[d.course]; const r=computeScore(d,p); const holes=r.holes; const ph=r.ph;
-    const tee = Object.keys(card.tees).includes("White")?"White":Object.keys(card.tees)[0];
+    const tee = Object.keys(card.tees).includes("Yellow")?"Yellow":Object.keys(card.tees)[0];
     sheet(`<div class="row" style="justify-content:space-between"><h3>${esc(p.nick)} · ${esc(COURSES[d.course].short)}</h3><button class="btn sm ghost" data-close>Fermer</button></div>
       <div class="scsum"><div><b class="num">${r.n?r.gross:"—"}</b><small>Brut</small></div><div><b class="num">${r.n?r.net:"—"}</b><small>Net</small></div><div><b class="num">${r.n?r.stb:"—"}</b><small>Stableford</small></div><div><b class="num">${r.n?fmtToPar(r.toParGross):"—"}</b><small>vs par</small></div></div>
       <p class="muted small">Handicap ${r.hcpMissing?"<b>manquant</b> (à renseigner dans Jambons → profil)":playerHcp(p)+" · joue "+ph+" coup"+(Math.abs(ph)>1?"s":"")} · ● = coup reçu · distances départs ${({White:"blancs",Yellow:"jaunes",Blue:"bleus",Red:"rouges"})[tee]||tee}</p>
@@ -1202,7 +1202,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261030-153112";
+const BUILD="20261030-153409";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
