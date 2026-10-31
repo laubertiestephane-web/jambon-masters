@@ -1079,15 +1079,21 @@ function pronoScores(d){ const {ranks,any}=actualRanks(d); const ps=S.players.sl
   const rows=ps.map(p=>{ const pod=podiumOf(d.id,p.id); if(!pod.some(Boolean)) return null; const r=any?podiumPoints(pod,ranks):{pts:0,exact:0,inp:0,detail:["","",""]}; return {p,pod,...r,complete:pod.every(Boolean)}; }).filter(Boolean);
   rows.sort((a,b)=>b.pts-a.pts||b.exact-a.exact||a.p.order-b.p.order); let rank=0; rows.forEach((r,i)=>{ if(i===0||r.pts!==rows[i-1].pts||r.exact!==rows[i-1].exact) rank=i+1; r.rank=rank; });
   return {rows,done:dayDone(d),any,ranks}; }
-function pronoOdds(d){ const w=[3,2,1]; const tot={}; let n=0,sum=0; S.players.forEach(p=>tot[p.id]=0);
-  S.players.forEach(p=>{ const pod=podiumOf(d.id,p.id); if(!pod.some(Boolean)) return; n++; pod.forEach((pid,i)=>{ if(pid && tot[pid]!=null){ tot[pid]+=w[i]; sum+=w[i]; } }); });
-  const rows=S.players.map(p=>{ const share=sum?tot[p.id]/sum:0; const cote = share>0 ? Math.max(1.1, Math.round((1/share)*10)/10) : null; return {p,share,cote,w:tot[p.id]}; }).sort((a,b)=>b.share-a.share||a.p.order-b.p.order);
-  return {rows,n}; }
-function oddsCard(d){ const {rows,n}=pronoOdds(d); if(!n) return `<div class="card"><div class="eyebrow">Cotes du jour</div><p class="muted">Les cotes apparaîtront dès les premiers podiums déposés.</p></div>`;
+function playerForm(d){ // moyenne Stableford des journées déjà terminées avant d (et de d elle-même si terminée)
+  const out={}; S.players.forEach(p=>{ let s=0,n=0; for(const dd of golfDays()){ if(dd.id>d.id || !CARDS[dd.course]) continue; const r=computeScore(dd,p); if(r.complete){ s+=r.stb; n++; } } out[p.id]=n?{avg:s/n,n}:null; }); return out; }
+function pronoOdds(d){ const w=[3,2,1]; const votes={}; let n=0,sum=0; S.players.forEach(p=>votes[p.id]=0);
+  S.players.forEach(p=>{ const pod=podiumOf(d.id,p.id); if(!pod.some(Boolean)) return; n++; pod.forEach((pid,i)=>{ if(pid && votes[pid]!=null){ votes[pid]+=w[i]; sum+=w[i]; } }); });
+  const form=playerForm(d); const played=Object.values(form).filter(Boolean); const hasForm=played.length>0;
+  // force "forme" : écart à la moyenne du groupe, transformé en poids (2 pts Stableford d'écart ≈ ×1,25)
+  let fw={}, fsum=0; if(hasForm){ const mean=played.reduce((a,x)=>a+x.avg,0)/played.length; S.players.forEach(p=>{ const f=form[p.id]; fw[p.id]=Math.pow(1.12,(f?f.avg:mean)-mean); fsum+=fw[p.id]; }); }
+  const rows=S.players.map(p=>{ const vs=sum?votes[p.id]/sum:0; const fs=hasForm?fw[p.id]/fsum:0; let share; if(sum&&hasForm) share=0.5*vs+0.5*fs; else if(sum) share=vs; else share=fs;
+    const cote = share>0 ? Math.max(1.1, Math.round((1/share)*10)/10) : null; return {p,share,cote,votes:vs,form:form[p.id]}; }).sort((a,b)=>b.share-a.share||a.p.order-b.p.order);
+  return {rows,n,hasForm,hasVotes:sum>0}; }
+function oddsCard(d){ const {rows,n,hasForm,hasVotes}=pronoOdds(d); if(!hasVotes&&!hasForm) return `<div class="card"><div class="eyebrow">Cotes du jour</div><p class="muted">Les cotes apparaîtront dès les premiers podiums déposés.</p></div>`;
   const fmt=c=>c==null?"—":String(c).replace(".",",");
   return `<div class="card"><div class="eyebrow">Cotes du jour · ${n} podium${n>1?"s":""} déposé${n>1?"s":""}</div>
-    <div class="rank">${rows.map((x,i)=>`<span class="pos ${i<3&&x.cote?"top":""}">${x.cote?i+1:""}</span><span class="nm"><b>${esc(x.p.nick)}</b><small>${x.cote?(i===0?"favori · ":"")+Math.round(x.share*100)+" % des voix":"aucune voix… l'outsider"}</small></span><span class="val num">${fmt(x.cote)}</span><span class="thru">${x.cote?"cote":""}</span>`).join("")}</div>
-    <p class="muted small">Cote calculée sur les podiums déposés (1er = 3 voix, 2e = 2, 3e = 1), sans dire qui a voté quoi. Plus la cote est basse, plus les Jambons y croient.</p></div>`; }
+    <div class="rank">${rows.map((x,i)=>`<span class="pos ${i<3&&x.cote?"top":""}">${x.cote?i+1:""}</span><span class="nm"><b>${esc(x.p.nick)}</b><small>${x.cote?(i===0?"favori · ":"")+[hasVotes?Math.round(x.votes*100)+" % des voix":"",x.form?"forme "+Math.round(x.form.avg)+" pts":hasForm?"pas encore joué":""].filter(Boolean).join(" · "):"aucune voix… l'outsider"}</small></span><span class="val num">${fmt(x.cote)}</span><span class="thru">${x.cote?"cote":""}</span>`).join("")}</div>
+    <p class="muted small">Cote = moitié podiums déposés (1er = 3 voix, 2e = 2, 3e = 1, sans dire qui a voté quoi), moitié forme (moyenne Stableford des journées jouées). Plus la cote est basse, plus c'est le favori.</p></div>`; }
 function renderPronos(){
   const gd=golfDays(); if(!S.pronoDay || !gd.some(d=>d.id===S.pronoDay)) S.pronoDay=defaultLiveDay();
   const d=S.days.find(x=>x.id===S.pronoDay); const can=!!S.uid && !!S.db; const me=myPlayerId(); const ps=S.players.slice().sort((a,b)=>a.order-b.order);
@@ -1330,7 +1336,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-210623";
+const BUILD="20261031-211123";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
