@@ -818,7 +818,7 @@ function renderBoard(){
   <div class="card"><div class="eyebrow">Course au MVP</div>
     <div class="bal">${mvp().map((p,i)=>`<span>${i<3&&p.pts>0?["🥇","🥈","🥉"][i]+" ":""}<b>${esc(p.nick)}</b> <span class="muted small">${p.team?esc(S.cfg["team"+p.team].name):"sans équipe"}</span></span><span class="v num">${fmtPts(p.pts)}</span>`).join("")}</div></div>
   ${S.days.map(d=>{ const p=dparts(d.id); const golf=COURSES[d.course];
-    return `<div class="card"><div class="day"><div class="d"><b>${p.d}</b><span>${p.dow}</span></div><div><b>${esc(dayTitle(d))}</b><br><span class="muted small">${golf?(d.teeTime?"Départ "+esc(d.teeTime):"Heure à confirmer"):(d.label?"":"")}${d.note?" · "+esc(d.note):""}</span></div>${golf?(()=>{ const r=effResult(d); const s=daySummary(d); const sub=s&&s.started?`<span class="muted small num" style="text-align:center">${fmtPts(s.a)} – ${fmtPts(s.b)}${s.kind==="stb"?" pts":""}</span>`:""; return `<span style="display:grid;gap:2px;justify-items:center"><span class="res ${r||""}">${resLabel(r)||(s&&s.started?"En cours":"À jouer")}</span>${sub}</span>`; })():""}</div>
+    return `<div class="card"><div class="day"><div class="d"><b>${p.d}</b><span>${p.dow}</span></div><div><b>${esc(dayTitle(d))}</b><br><span class="muted small">${golf?(d.teeTime?"Départ "+esc(d.teeTime):"Heure à confirmer"):(d.label?"":"")}${d.note?" · "+esc(d.note):""}</span></div>${golf?(()=>{ const r=effResult(d); const s=daySummary(d); const sub=r?`<span class="small num" style="text-align:center;font-weight:800;color:${r==="A"?"var(--teamA)":r==="B"?"var(--teamB)":"var(--warn)"}">● ${r==="draw"?"½ pt chacun":"1 pt"}</span>`:""; return `<span style="display:grid;gap:2px;justify-items:center"><span class="res ${r||""}">${resLabel(r)||(s&&s.started?"En cours":"À jouer")}</span>${sub}</span>`; })():""}</div>
     ${matchesHtml(d)}
     ${photoBlock(d,"small")}</div>`; }).join("")}`;
   bindPhotos($("#p-board"));
@@ -1311,7 +1311,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-105129";
+const BUILD="20261031-112755";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
