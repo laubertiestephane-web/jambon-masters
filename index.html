@@ -265,6 +265,7 @@ img{max-width:100%}
 .hrow .v.empty{color:var(--muted);font-size:.9rem}
 .hrow button{width:36px;height:36px;border-radius:9px;background:var(--surface);font-weight:900;font-size:1.2rem;box-shadow:var(--shadow)}
 .hrow .pts{font-size:.72rem;color:var(--muted);text-align:center;font-weight:800}
+.hrow.locked{opacity:.75}.hrow.locked button{background:transparent;box-shadow:none;color:var(--muted);font-size:1rem}
 .hrow.under .v{color:var(--ok)}.hrow.over .v{color:var(--pink)}
 .ptabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}
 .ptabs button{display:grid;justify-items:center;gap:2px;padding:6px 2px;border-radius:12px;background:var(--surface2);font-size:.72rem;line-height:1.1}
@@ -1018,7 +1019,7 @@ function bindRanking(root){
 function playerScoreLine(d,pid){ const p=playerById(pid); if(!p) return ""; const r=computeScore(d,p); return `<span>${esc(p.nick)} <b class="num">${r.n?r.stb:"—"}</b></span>`; }
 let scoreSheet=null; const scoreWriteQ={};
 function openScoreSheet(dayId,pid,group,matchIdx){
-  group = group && group.length ? group : [pid];
+  group = group && group.length ? group : [pid]; const unlocked=new Set();
   const draw=()=>{ const d=S.days.find(x=>x.id===dayId); const p=playerById(pid); const card=CARDS[d.course]; const r=computeScore(d,p); const holes=r.holes; const ph=r.ph;
     const tabs = group.length>1 ? `<div class="ptabs">${group.map(id=>{ const q=playerById(id); if(!q) return ""; const rr=computeScore(d,q); return `<button data-ptab="${id}" aria-pressed="${id===pid}"><span class="av">${avatarHtml(q)}</span><b>${esc(q.nick)}</b><small class="num">${rr.n?rr.stb+" pts · thru "+rr.n:"—"}</small></button>`; }).join("")}</div>` : "";
     const mp = (matchIdx!=null && d.id===lastGolfDay()) ? `<button class="btn ghost" id="toMatchPlay">🏆 Match play : qui gagne le trou ?</button>` : "";
@@ -1029,11 +1030,13 @@ function openScoreSheet(dayId,pid,group,matchIdx){
       <div class="scsum"><div><b class="num">${r.n?r.gross:"—"}</b><small>Brut</small></div><div><b class="num">${r.n?r.net:"—"}</b><small>Net</small></div><div><b class="num">${r.n?r.stb:"—"}</b><small>Stableford</small></div><div><b class="num">${r.n?fmtToPar(r.toParGross):"—"}</b><small>Brut vs par</small></div></div>
       <p class="muted small">${r.hcpMissing?"Index <b>manquant</b> (à renseigner dans Jambons → profil) · joue 0":"Index "+playerHcp(p)+" → <b>"+ph+" coup"+(Math.abs(ph)>1?"s":"")+"</b> sur ce parcours"+(rt?" (départs "+(TEE_FR[tee]||tee)+" "+rt.cr+" / "+rt.slope+")":" (sans slope)")} · ● = coup reçu</p>${teeChips}
       <div class="hgrid">${card.par.map((pr,i)=>{ const rec=strokesOnHole(ph,card.si[i]); const g=holes[i]; const pts=g==null?"":Math.max(0,2+pr+rec-g); const cls=g==null?"":g<pr?"under":g>pr?"over":"";
-        return `<div class="hrow ${cls}"><span class="hn">${i+1}</span><span class="hi">Par ${pr} · idx ${card.si[i]}<br>${card.tees[tee][i]} m ${"<i></i>".repeat(Math.max(0,rec))}</span><button data-dec="${i}">−</button><span><span class="v ${g==null?"empty":""} num">${g==null?"·":g}</span><div class="pts">${g==null?"":pts+" pt"+(pts>1?"s":"")}</div></span><button data-inc="${i}">+</button></div>`; }).join("")}</div>
-      <div class="grid2"><button class="btn ghost" id="fillPar">Pré-remplir les trous vides au par</button><button class="btn ghost" id="clearScore">Effacer la carte</button></div>`);
+        const locked = g!=null && holes.slice(i+1).some(v=>v!=null) && !unlocked.has(pid+":"+i);
+        return `<div class="hrow ${cls} ${locked?"locked":""}"><span class="hn">${i+1}</span><span class="hi">Par ${pr} · idx ${card.si[i]}<br>${card.tees[tee][i]} m ${"<i></i>".repeat(Math.max(0,rec))}</span>${locked?`<span></span>`:`<button data-dec="${i}">−</button>`}<span><span class="v ${g==null?"empty":""} num">${g==null?"·":g}</span><div class="pts">${g==null?"":pts+" pt"+(pts>1?"s":"")}</div></span>${locked?`<button data-unlock="${i}" title="Corriger ce trou">✎</button>`:`<button data-inc="${i}">+</button>`}</div>`; }).join("")}</div>
+      <p class="muted small">Un trou se verrouille dès que le suivant est saisi. Pour corriger, appuie sur ✎ à droite du trou.</p><div class="grid2"><button class="btn ghost" id="fillPar">Pré-remplir les trous vides au par</button><button class="btn ghost" id="clearScore">Effacer toute la carte</button></div>`);
     const write=(arr,tee2)=>{ const key="live/score_"+dayId+"_"+pid; const cur=S.scores[scoreKey(dayId,pid)]||{}; const teeV=tee2||cur.tee||""; S.scores[scoreKey(dayId,pid)]={...cur,holes:arr,tee:teeV}; const prev=scoreWriteQ[key]||Promise.resolve(); scoreWriteQ[key]=prev.then(()=>S.db.doc(key).set({holes:arr.map(v=>v==null?null:v), tee:teeV, player:pid, day:dayId, by:S.uid||"", ts:Date.now()})).catch(e=>{ console.error(e); toast("Enregistrement refusé"); }); };
     const upd=(i,delta)=>{ const arr=holes.slice(); const pr=card.par[i]; let v=arr[i]==null?pr:arr[i]; v=Math.max(1,Math.min(15,v+delta)); if(arr[i]==null && delta===0) v=pr; arr[i]=v; S.scores[scoreKey(dayId,pid)]={...(S.scores[scoreKey(dayId,pid)]||{}),holes:arr}; write(arr); draw(); };
     $("#sheet").querySelectorAll("[data-ptab]").forEach(b=>b.onclick=()=>{ pid=b.dataset.ptab; draw(); });
+    $("#sheet").querySelectorAll("[data-unlock]").forEach(b=>b.onclick=()=>{ unlocked.add(pid+":"+b.dataset.unlock); draw(); toast("Trou "+(+b.dataset.unlock+1)+" déverrouillé"); });
     $("#sheet").querySelectorAll("[data-stee]").forEach(b=>b.onclick=()=>{ write(holes.slice(), b.dataset.stee); draw(); toast("Départs "+(TEE_FR[b.dataset.stee]||b.dataset.stee)+" pour "+p.nick); });
     const tmp=$("#toMatchPlay"); if(tmp) tmp.onclick=()=>openLiveMatch(dayId,matchIdx);
     $("#sheet").querySelectorAll("[data-inc]").forEach(b=>b.onclick=()=>upd(+b.dataset.inc, holes[+b.dataset.inc]==null?0:1));
@@ -1236,7 +1239,8 @@ function startSubs(db){ if(subsStarted) return; subsStarted=true;
   sub(db.doc("config/main"), s=>{ if(!S.fx.live && S.cfg.rate>0) S.fx.rate=S.cfg.rate; });
   sub(db.doc("config/settled"), s=>{ S.settled = s.exists? {...s.data()} : {}; });
   sub(db.doc("config/admins"), s=>{ S.admins = s.exists ? (s.data().uids||[]) : []; recomputeOwner(); });
-  sub(db.collection("players"), s=>{ if(!s.empty){ S.players = s.docs.map(x=>({team:"",order:0,...x.data(), id:x.id})); } });
+  const NICK_FIX={tens:"El Padré"}; // demandé par Brad le 31/10 (ex-« Tens »)
+  sub(db.collection("players"), s=>{ if(!s.empty){ S.players = s.docs.map(x=>({team:"",order:0,...x.data(), id:x.id})); S.players.forEach(p=>{ if(NICK_FIX[p.id] && p.nick!==NICK_FIX[p.id]){ p.nick=NICK_FIX[p.id]; if(S.isOwner) S.db.doc("players/"+p.id).set({...p}).catch(()=>{}); } }); } });
   sub(db.collection("days"), s=>{ if(!s.empty){ const m={}; s.docs.forEach(x=>m[x.id]={...x.data(), id:x.id}); S.days = S.days.map(d=>m[d.id]?{...d,...m[d.id]}:d); } });
   sub(db.collection("photos"), s=>{ S.photos={}; s.docs.forEach(x=>S.photos[x.id]=x.data()); });
   sub(db.collection("profiles"), s=>{ S.profiles={}; s.docs.forEach(x=>S.profiles[x.id]=x.data()); });
@@ -1254,7 +1258,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-012401";
+const BUILD="20261031-104438";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
