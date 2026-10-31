@@ -536,6 +536,8 @@ const TEE_OVERRIDES = {"2026-10-31":{carlo:"Blue"}}; // départs particuliers d�
 function playerTee(d,pid){ const card=CARDS[d.course]; if(!card) return ""; const s=S.scores[d.id+"_"+pid]; const o=(TEE_OVERRIDES[d.id]||{})[pid]; const tee=(s&&s.tee)||o; return (tee && Object.keys(card.tees).includes(tee)) ? tee : dayTee(d); }
 function dayTee(d){ const card=CARDS[d.course]; if(!card) return ""; const tees=Object.keys(card.tees); return (d.tee && tees.includes(d.tee)) ? d.tee : (tees.includes("White")?"White":tees[0]); }
 function ratingFor(course,tee){ const o=((S.cfg.ratings||{})[course]||{})[tee] || (RATINGS[course]||{})[tee]; if(!o) return null; const cr=parseFloat(o[0]), sl=parseFloat(o[1]); return (cr>0&&sl>0)?{cr,slope:sl}:null; }
+// Épisodes Radio Jambon (fichiers dans /radio/)
+const RADIO = [ {day:"2026-10-31", title:"J1 · Simola", file:"radio/2026-10-31.mp3", dur:"4 min 41"} ];
 const VILLA = {name:"Cloud 9 Villa", estate:"Pezula Golf Estate", addr:"Welbedacht Lane, Rexford, Knysna 6571", phone:"+27 83 459 4540", maps:"Cloud+9+Estate+Welbedacht+Lane+Rexford+Knysna"};
 const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, Knysna Rd, George 6530", maps:"Shop+55+Eden+Meander+Lifestyle+Centre+Knysna+Rd+George+6530"};
 
@@ -665,6 +667,11 @@ async function loadWeather(key){ const g=GEO[key]; if(!g || S.wx[key]) return; t
 function wxAt(j, dayId, hour){ if(!j||!j.hourly) return null; const i=j.hourly.time.indexOf(dayId+"T"+String(hour).padStart(2,"0")+":00"); if(i<0) return null; return {t:j.hourly.temperature_2m[i], rain:j.hourly.precipitation_probability[i], wind:j.hourly.wind_speed_10m[i], code:j.hourly.weather_code[i]}; }
 function wxDay(j, dayId){ if(!j||!j.daily) return null; const i=j.daily.time.indexOf(dayId); if(i<0) return null; return {max:j.daily.temperature_2m_max[i], min:j.daily.temperature_2m_min[i], rain:j.daily.precipitation_probability_max[i], wind:j.daily.wind_speed_10m_max[i], code:j.daily.weather_code[i]}; }
 function teeHour(d){ const m=(d.teeTime||"").match(/(\d{1,2})\s*[h:]/); return m?+m[1]:13; }
+function radioCard(){ if(!RADIO.length) return ""; const eps=RADIO.slice().sort((a,b)=>b.day.localeCompare(a.day)); const e=eps[0]; const p=dparts(e.day);
+  return `<div class="card" style="background:linear-gradient(135deg,var(--navy),#2a3190);color:#fff"><div class="eyebrow" style="color:#ffb3d1">📻 Radio Jambon · le compte rendu du soir</div><h2 style="color:#fff">${esc(e.title)} · ${p.dow} ${p.d} ${p.mon}</h2>
+    <audio controls preload="none" src="${e.file}?v=${BUILD}" style="width:100%;margin:8px 0 4px"></audio>
+    <div class="row" style="justify-content:space-between"><span class="small" style="opacity:.85">${esc(e.dur)} · deux voix, zéro langue de bois</span><a class="btn sm" style="background:var(--pink);color:#fff" href="${e.file}" download>Télécharger</a></div>
+    ${eps.length>1?`<p class="small" style="margin-top:8px;opacity:.9">Épisodes précédents : ${eps.slice(1).map(x=>`<a href="${x.file}" style="color:#fff;text-decoration:underline">${esc(x.title)}</a>`).join(" · ")}</p>`:""}</div>`; }
 function weatherCard(){
   const t=todayId(); const inTrip = t>=TRIP_START && t<=TRIP_END;
   const golf=golfDays(); const next = golf.find(d=>d.id>=t); // golf du jour ou prochain
@@ -728,7 +735,7 @@ function renderHome(){
   const meP = playerById(myPlayerId());
   const welcome = meP ? ""
     : `<div class="welcome"><h2>Bienvenue à toi, petit jambon !</h2><span class="small">Dis-nous qui tu es : l'appli te reconnaîtra à chaque ouverture.</span><button class="btn primary" id="pickMe" style="justify-self:start;margin-top:6px">C'est moi…</button></div>`;
-  const html = `${welcome}${installCard()}${top}${weatherCard()}
+  const html = `${welcome}${installCard()}${top}${radioCard()}${weatherCard()}
   <div class="card"><div class="eyebrow">Jambon Masters · classement par équipe</div>
     <div class="score">
       <div class="team"><span class="name"><span class="dot" style="background:var(--teamA)"></span> ${esc(S.cfg.teamA.name)}</span><span class="pts num">${fmtPts(a)}</span></div>
@@ -1336,7 +1343,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-211123";
+const BUILD="20261031-212532";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
