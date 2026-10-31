@@ -1075,6 +1075,15 @@ function pronoScores(d){ const {ranks,any}=actualRanks(d); const ps=S.players.sl
   const rows=ps.map(p=>{ const pod=podiumOf(d.id,p.id); if(!pod.some(Boolean)) return null; const r=any?podiumPoints(pod,ranks):{pts:0,exact:0,inp:0,detail:["","",""]}; return {p,pod,...r,complete:pod.every(Boolean)}; }).filter(Boolean);
   rows.sort((a,b)=>b.pts-a.pts||b.exact-a.exact||a.p.order-b.p.order); let rank=0; rows.forEach((r,i)=>{ if(i===0||r.pts!==rows[i-1].pts||r.exact!==rows[i-1].exact) rank=i+1; r.rank=rank; });
   return {rows,done:dayDone(d),any,ranks}; }
+function pronoOdds(d){ const w=[3,2,1]; const tot={}; let n=0,sum=0; S.players.forEach(p=>tot[p.id]=0);
+  S.players.forEach(p=>{ const pod=podiumOf(d.id,p.id); if(!pod.some(Boolean)) return; n++; pod.forEach((pid,i)=>{ if(pid && tot[pid]!=null){ tot[pid]+=w[i]; sum+=w[i]; } }); });
+  const rows=S.players.map(p=>{ const share=sum?tot[p.id]/sum:0; const cote = share>0 ? Math.max(1.1, Math.round((1/share)*10)/10) : null; return {p,share,cote,w:tot[p.id]}; }).sort((a,b)=>b.share-a.share||a.p.order-b.p.order);
+  return {rows,n}; }
+function oddsCard(d){ const {rows,n}=pronoOdds(d); if(!n) return `<div class="card"><div class="eyebrow">Cotes du jour</div><p class="muted">Les cotes apparaîtront dès les premiers podiums déposés.</p></div>`;
+  const fmt=c=>c==null?"—":String(c).replace(".",",");
+  return `<div class="card"><div class="eyebrow">Cotes du jour · ${n} podium${n>1?"s":""} déposé${n>1?"s":""}</div>
+    <div class="rank">${rows.map((x,i)=>`<span class="pos ${i<3&&x.cote?"top":""}">${x.cote?i+1:""}</span><span class="nm"><b>${esc(x.p.nick)}</b><small>${x.cote?(i===0?"favori · ":"")+Math.round(x.share*100)+" % des voix":"aucune voix… l'outsider"}</small></span><span class="val num">${fmt(x.cote)}</span><span class="thru">${x.cote?"cote":""}</span>`).join("")}</div>
+    <p class="muted small">Cote calculée sur les podiums déposés (1er = 3 voix, 2e = 2, 3e = 1), sans dire qui a voté quoi. Plus la cote est basse, plus les Jambons y croient.</p></div>`; }
 function renderPronos(){
   const gd=golfDays(); if(!S.pronoDay || !gd.some(d=>d.id===S.pronoDay)) S.pronoDay=defaultLiveDay();
   const d=S.days.find(x=>x.id===S.pronoDay); const can=!!S.uid && !!S.db; const me=myPlayerId(); const ps=S.players.slice().sort((a,b)=>a.order-b.order);
@@ -1085,18 +1094,18 @@ function renderPronos(){
   if(!me){ mineHtml=`<div class="card"><div class="eyebrow">Mon podium</div><p class="muted">Dis-nous qui tu es pour pronostiquer.</p><button class="btn primary" id="pickMe2">C'est moi…</button></div>`; }
   else { const who=ps.filter(p=>p.id!==me).length; const submitted=ps.filter(p=>podiumOf(d.id,p.id).some(Boolean)).map(p=>p.nick);
     mineHtml=`<div class="card"><div class="eyebrow">Mon podium · ${esc(playerById(me)?.nick||"")}</div><h2>${esc(COURSES[d.course].short)} · ${p0.dow} ${p0.d}</h2>
-      <p class="muted small">${done?lk.why:"Qui finira 1er, 2e et 3e au Stableford aujourd'hui ? "+lk.why+" Les podiums des autres restent cachés jusqu'à la fin de la journée."}</p>
+      <p class="muted small">${done?lk.why:"Qui finira 1er, 2e et 3e au Stableford aujourd'hui ? "+lk.why+" Les podiums sont secrets : seul l'organisateur peut les voir."}</p>
       ${[0,1,2].map(i=>`<div class="prow" style="grid-template-columns:44px 1fr"><span style="font-size:1.4rem;text-align:center">${medals[i]}</span><select data-pod="${i}" ${done||!can?"disabled":""}><option value="">— choisir —</option>${ps.map(q=>`<option value="${q.id}" ${mine[i]===q.id?"selected":""} ${mine.includes(q.id)&&mine[i]!==q.id?"disabled":""}>${esc(q.nick)}</option>`).join("")}</select></div>`).join("")}
       ${submitted.length?`<p class="muted small">Ont déjà pronostiqué : ${submitted.map(esc).join(", ")}.</p>`:""}
     </div>`; }
   let rankHtml="";
   if(scope==="day"){ const r=pronoScores(d); const top=Object.entries(r.ranks).filter(([,rg])=>rg[0]<=3).sort((a,b)=>a[1][0]-b[1][0]).map(([pid,rg])=>`${rg[0]===rg[1]?medals[rg[0]-1]:"🏅"} ${esc(playerById(pid)?.nick||pid)}`);
-    const showDetail = r.done; // podiums visibles seulement journée terminée
+    const showDetail = false; // podiums secrets : seul l'organisateur les voit (Réglages)
     rankHtml = (r.any?`<p class="small"><b>Podium ${r.done?"du jour":"provisoire"} :</b> ${top.join(" · ")}</p>`:"")+(r.rows.length ? `<div class="rank">${r.rows.map(x=>`<span class="pos ${x.rank<=3?"top":""}">${x.rank}</span><span class="nm"><b>${esc(x.p.nick)}</b><small>${showDetail||x.p.id===me?x.pod.map((pid,i)=>pid?`${medals[i]} ${esc(playerById(pid)?.nick||"?")}${x.detail[i]==="exact"?" ✓":x.detail[i]==="in"?" ~":""}`:"").filter(Boolean).join(" · "):(x.complete?"podium déposé":"podium incomplet")}</small></span><span class="val num">${r.any?x.pts:"—"}</span><span class="thru">${r.any?"pts":""}</span>`).join("")}</div>${r.done?"":`<p class="muted small">Provisoire tant que toutes les cartes ne sont pas complètes.</p>`}` : `<p class="muted">Personne n'a encore déposé de podium pour cette journée.</p>`); }
   else { const tot={}; ps.forEach(p=>tot[p.id]={pts:0,days:0,exact:0}); for(const dd of gd){ if(!CARDS[dd.course]) continue; const r=pronoScores(dd); if(!r.done) continue; r.rows.forEach(x=>{ tot[x.p.id].pts+=x.pts; tot[x.p.id].days++; tot[x.p.id].exact+=x.exact; }); }
     const rows=ps.map(p=>({p,...tot[p.id]})).filter(x=>x.days>0).sort((a,b)=>b.pts-a.pts||b.exact-a.exact||a.p.order-b.p.order);
     rankHtml = rows.length ? `<div class="rank">${rows.map((x,i)=>`<span class="pos ${i<3?"top":""}">${i+1}</span><span class="nm"><b>${esc(x.p.nick)}</b><small>${x.days} journée${x.days>1?"s":""} · ${x.exact} place${x.exact>1?"s":""} exacte${x.exact>1?"s":""}</small></span><span class="val num">${x.pts}</span><span class="thru">pts</span>`).join("")}</div>` : `<p class="muted">Le cumul se remplit journée terminée après journée terminée.</p>`; }
-  $("#p-pronos").innerHTML = chips+mineHtml+`<div class="card"><div class="row" style="justify-content:space-between"><div><div class="eyebrow">Classement des pronos</div><h2>${scope==="day"?p0.dow+" "+p0.d:"Semaine"}</h2></div><div class="seg" style="min-width:150px"><button data-pscope="day" aria-pressed="${scope==="day"}">Journée</button><button data-pscope="week" aria-pressed="${scope==="week"}">Semaine</button></div></div>${rankHtml}<p class="muted small">Barème : bonne place = ${PODIUM_PTS.exact} pts, sur le podium mais pas à la bonne place = ${PODIUM_PTS.inPodium} pt, podium complet dans l'ordre = +${PODIUM_PTS.bonusOrder} (max ${3*PODIUM_PTS.exact+PODIUM_PTS.bonusOrder}). En cas d'ex æquo au Stableford, les places partagées comptent comme bonnes.</p></div>`;
+  $("#p-pronos").innerHTML = chips+mineHtml+oddsCard(d)+`<div class="card"><div class="row" style="justify-content:space-between"><div><div class="eyebrow">Classement des pronos</div><h2>${scope==="day"?p0.dow+" "+p0.d:"Semaine"}</h2></div><div class="seg" style="min-width:150px"><button data-pscope="day" aria-pressed="${scope==="day"}">Journée</button><button data-pscope="week" aria-pressed="${scope==="week"}">Semaine</button></div></div>${rankHtml}<p class="muted small">Barème : bonne place = ${PODIUM_PTS.exact} pts, sur le podium mais pas à la bonne place = ${PODIUM_PTS.inPodium} pt, podium complet dans l'ordre = +${PODIUM_PTS.bonusOrder} (max ${3*PODIUM_PTS.exact+PODIUM_PTS.bonusOrder}). En cas d'ex æquo au Stableford, les places partagées comptent comme bonnes.</p></div>`;
   $("#p-pronos").querySelectorAll("[data-pday]").forEach(b=>b.onclick=()=>{ S.pronoDay=b.dataset.pday; renderPronos(); });
   $("#p-pronos").querySelectorAll("[data-pscope]").forEach(b=>b.onclick=()=>{ S.pronoScope=b.dataset.pscope; renderPronos(); });
   const pm=$("#pickMe2"); if(pm) pm.onclick=openPickMe;
@@ -1209,6 +1218,9 @@ function renderAdmin(){
       ${S.photos[d.id]?`<button class="btn sm ghost" data-rmphoto="${d.id}">Retirer la photo du jour</button>`:""}
     </div>`;}).join("")}
   </div>
+  <div class="card"><div class="eyebrow">Pronos (secrets) · podiums déposés</div>
+    ${golfDays().map(d=>{ const rows=ps.map(q=>({q,pod:podiumOf(d.id,q.id)})).filter(x=>x.pod.some(Boolean)); if(!rows.length) return ""; const p=dparts(d.id); return `<div class="field"><label>${p.dow} ${p.d} · ${esc(COURSES[d.course].short)} · ${rows.length}/${ps.length}</label>${rows.map(x=>`<div class="small" style="padding:3px 0;border-bottom:1px solid var(--line)"><b>${esc(x.q.nick)}</b> → ${x.pod.map((pid,i)=>pid?["🥇","🥈","🥉"][i]+" "+esc(playerById(pid)?.nick||"?"):"").filter(Boolean).join(" · ")}</div>`).join("")}</div>`; }).join("")||`<p class="muted small">Aucun podium déposé pour l'instant.</p>`}
+  </div>
   <div class="card"><div class="eyebrow">Slope & course rating (hommes) · handicap de parcours = index × slope / 113 + (rating − par)</div>
     ${Object.keys(CARDS).map(k=>`<div class="field"><label>${esc(COURSES[k].short)} · par ${CARDS[k].par.reduce((a,b)=>a+b,0)}</label>${Object.keys(CARDS[k].tees).map(tee=>{ const r=ratingFor(k,tee); return `<div class="grid2" style="grid-template-columns:80px 1fr 1fr;align-items:center;margin-bottom:4px"><span class="small">${TEE_FR[tee]||tee}</span><input data-rt="${k}.${tee}.0" inputmode="decimal" value="${r?r.cr:""}" placeholder="rating"><input data-rt="${k}.${tee}.1" inputmode="numeric" value="${r?r.slope:""}" placeholder="slope"></div>`; }).join("")}</div>`).join("")}
     <p class="muted small">Pré-rempli : Simola et Goose Valley (valeurs 2026), Pezula / Plettenberg / Knysna GC (feuille GolfRSA 2018). Corrige avec la carte du club si besoin.</p>
@@ -1314,7 +1326,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-113715";
+const BUILD="20261031-114509";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
