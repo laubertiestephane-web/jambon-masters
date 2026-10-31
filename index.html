@@ -568,13 +568,12 @@ function teamStb(d){ if(!CARDS[d.course]) return null; const card=CARDS[d.course
 function daySummary(d){ const gd=golfDays(); const isFinal = gd.length && d.id===gd[gd.length-1].id; if(isFinal){ const s=liveSummary(d); return s?{...s,kind:"mp"}:null; } return teamStb(d); }
 function effResult(d){ if(d.result) return d.result; const s=daySummary(d); if(s && s.done){ return s.a>s.b?"A":s.b>s.a?"B":"draw"; } return ""; }
 function points(){ let a=0,b=0; for(const d of S.days){ const r=effResult(d); if(r==="A")a++; else if(r==="B")b++; else if(r==="draw"){a+=.5;b+=.5;} } return {a,b}; }
-function mvp(){ // MVP individuel : chaque journée, classement Stableford → 12 pts au 1er, 11 au 2e… (ex æquo = mêmes points) ; cumul semaine, départage au total Stableford
-  const N=S.players.length; const acc={}; S.players.forEach(p=>acc[p.id]={pts:0,stb:0,days:0,wins:0});
-  for(const d of S.days){ if(!CARDS[d.course]) continue; const rows=S.players.map(p=>({p,r:computeScore(d,p)})).filter(x=>x.r.complete); if(!rows.length) continue;
-    rows.forEach(x=>{ const higher=rows.filter(y=>y.r.stb>x.r.stb).length; const a=acc[x.p.id]; a.pts+=Math.max(0,N-higher); a.stb+=x.r.stb; a.days++; if(higher===0) a.wins++; }); }
-  return S.players.slice().sort((a,b)=>acc[b.id].pts-acc[a.id].pts||acc[b.id].stb-acc[a.id].stb||a.order-b.order).map(p=>({...p,...acc[p.id]})); }
-// Tirage des parties : on cherche la combinaison où chacun retrouve le moins possible
-// de joueurs (partenaires ou adversaires) déjà croisés les autres jours.
+function mvp(){ // MVP = cumul des points Stableford sur la semaine ; départage au brut cumulé (le plus bas)
+  const acc={}; S.players.forEach(p=>acc[p.id]={pts:0,stb:0,gross:0,days:0,wins:0});
+  for(const d of S.days){ if(!CARDS[d.course]) continue; const rows=S.players.map(p=>({p,r:computeScore(d,p)})).filter(x=>x.r.complete); if(!rows.length) continue; const best=Math.max(...rows.map(x=>x.r.stb));
+    rows.forEach(x=>{ const a=acc[x.p.id]; a.stb+=x.r.stb; a.gross+=x.r.gross; a.days++; if(x.r.stb===best) a.wins++; }); }
+  S.players.forEach(p=>acc[p.id].pts=acc[p.id].stb);
+  return S.players.slice().sort((a,b)=>acc[b.id].stb-acc[a.id].stb||(acc[a.id].gross||1e9)-(acc[b.id].gross||1e9)||a.order-b.order).map(p=>({...p,...acc[p.id]})); }
 function smartDraw(dayId){
   const A=teamOf("A").map(p=>p.id), B=teamOf("B").map(p=>p.id); if(A.length<6||B.length<6) return null;
   const seen={}; const key=(x,y)=>x<y?x+"|"+y:y+"|"+x;
@@ -820,8 +819,8 @@ function renderBoard(){
   </div>
   ${S.cfg.format?`<div class="card"><div class="eyebrow">Formule de jeu</div><p>${esc(S.cfg.format)}</p>${S.cfg.squabbit?`<a class="btn ghost" href="${esc(S.cfg.squabbit)}" target="_blank" rel="noopener">🐰 Ouvrir le tournoi sur Squabbit</a>`:""}</div>`:""}
   <div class="card"><div class="eyebrow">Course au MVP</div>
-    <div class="bal">${mvp().map((p,i)=>`<span>${i<3&&p.pts>0?["🥇","🥈","🥉"][i]+" ":""}<b>${esc(p.nick)}</b> <span class="muted small">${p.days?`${p.stb} pts Stableford · ${p.days} j${p.wins?" · "+p.wins+" victoire"+(p.wins>1?"s":""):""}`:"pas encore joué"}</span></span><span class="v num">${p.pts}</span>`).join("")}</div>
-    <p class="muted small">Chaque journée : 12 pts au meilleur Stableford, 11 au 2e… 1 au 12e (ex æquo = mêmes points). Cumul sur la semaine, départagé au total Stableford.</p></div>
+    <div class="bal">${mvp().map((p,i)=>`<span>${i<3&&p.pts>0?["🥇","🥈","🥉"][i]+" ":""}<b>${esc(p.nick)}</b> <span class="muted small">${p.days?`brut ${p.gross} · ${p.days} j${p.wins?" · "+p.wins+" victoire"+(p.wins>1?"s":""):""}`:"pas encore joué"}</span></span><span class="v num">${p.days?p.stb:"—"}</span>`).join("")}</div>
+    <p class="muted small">Cumul des points Stableford de la semaine ; à égalité, le meilleur brut cumulé passe devant.</p></div>
   ${S.days.map(d=>{ const p=dparts(d.id); const golf=COURSES[d.course];
     return `<div class="card"><div class="day"><div class="d"><b>${p.d}</b><span>${p.dow}</span></div><div><b>${esc(dayTitle(d))}</b><br><span class="muted small">${golf?(d.teeTime?"Départ "+esc(d.teeTime):"Heure à confirmer"):(d.label?"":"")}${d.note?" · "+esc(d.note):""}</span></div>${golf?(()=>{ const r=effResult(d); const s=daySummary(d); const sub=r?`<span class="small num" style="text-align:center;font-weight:800;color:${r==="A"?"var(--teamA)":r==="B"?"var(--teamB)":"var(--warn)"}">● ${r==="draw"?"½ pt chacun":"1 pt"}</span>`:""; return `<span style="display:grid;gap:2px;justify-items:center"><span class="res ${r||""}">${resLabel(r)||(s&&s.started?"En cours":"À jouer")}</span>${sub}</span>`; })():""}</div>
     ${matchesHtml(d)}
@@ -1331,7 +1330,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-205946";
+const BUILD="20261031-210134";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
