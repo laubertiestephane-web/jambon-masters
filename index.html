@@ -1059,6 +1059,9 @@ function openScoreSheet(dayId,pid,group,matchIdx){
 const PODIUM_PTS = {exact:3, inPodium:1, bonusOrder:3}; // place exacte 3 pts, dans le podium mais mauvaise place 1 pt, podium complet dans l'ordre +3 → max 12
 function pronoKey(dayId,pid){ return dayId+"_"+pid; }
 function podiumOf(dayId,pid){ const o=S.pronos[pronoKey(dayId,pid)]; const a=(o&&o.podium)||[]; return [a[0]||"",a[1]||"",a[2]||""]; }
+function firstTee(d){ const m=(d.teeTime||"").match(/(\d{1,2})\s*[h:]\s*(\d{2})?/); return m?{h:+m[1],m:+(m[2]||0)}:null; }
+function nowSA(){ const s=new Intl.DateTimeFormat("en-GB",{timeZone:"Africa/Johannesburg",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date()); const g=k=>s.find(x=>x.type===k).value; return {id:g("year")+"-"+g("month")+"-"+g("day"), min:+g("hour")*60+ +g("minute")}; }
+function pronoLocked(d){ if(dayDone(d)) return {locked:true,why:"Journée terminée : podiums figés."}; const ft=firstTee(d); const n=nowSA(); if(n.id>d.id) return {locked:true,why:"Pronos fermés (départ passé)."}; if(n.id===d.id && ft && n.min>=ft.h*60+ft.m) return {locked:true,why:`Pronos fermés depuis le départ de ${ft.h}h${String(ft.m).padStart(2,"0")}.`}; return {locked:false,why:ft?`Pronos ouverts jusqu'au premier départ (${ft.h}h${String(ft.m).padStart(2,"0")}).`:"Pronos ouverts jusqu'au départ."}; }
 function dayDone(d){ const ps=S.players.filter(p=>p.team); if(!ps.length) return false; return ps.every(p=>computeScore(d,p).complete); }
 function actualRanks(d){ // rang réel Stableford avec ex æquo : {pid:[rangMin,rangMax]}
   const rows=S.players.map(p=>({p,r:computeScore(d,p)})).filter(x=>x.r.n>0); const ranks={};
@@ -1076,13 +1079,13 @@ function renderPronos(){
   const gd=golfDays(); if(!S.pronoDay || !gd.some(d=>d.id===S.pronoDay)) S.pronoDay=defaultLiveDay();
   const d=S.days.find(x=>x.id===S.pronoDay); const can=!!S.uid && !!S.db; const me=myPlayerId(); const ps=S.players.slice().sort((a,b)=>a.order-b.order);
   if(!d||!CARDS[d.course]){ $("#p-pronos").innerHTML=`<div class="card"><p class="muted">Aucune journée de golf.</p></div>`; return; }
-  const p0=dparts(d.id); const done=dayDone(d); const mine=podiumOf(d.id,me); const scope=S.pronoScope; const medals=["🥇","🥈","🥉"];
+  const p0=dparts(d.id); const lk=pronoLocked(d); const done=lk.locked; const mine=podiumOf(d.id,me); const scope=S.pronoScope; const medals=["🥇","🥈","🥉"];
   const chips=`<div class="daychips">${gd.map(x=>`<button class="chip" data-pday="${x.id}" aria-pressed="${x.id===d.id}">${dparts(x.id).dow} ${dparts(x.id).d} · ${COURSES[x.course].short}</button>`).join("")}</div>`;
   let mineHtml="";
   if(!me){ mineHtml=`<div class="card"><div class="eyebrow">Mon podium</div><p class="muted">Dis-nous qui tu es pour pronostiquer.</p><button class="btn primary" id="pickMe2">C'est moi…</button></div>`; }
   else { const who=ps.filter(p=>p.id!==me).length; const submitted=ps.filter(p=>podiumOf(d.id,p.id).some(Boolean)).map(p=>p.nick);
     mineHtml=`<div class="card"><div class="eyebrow">Mon podium · ${esc(playerById(me)?.nick||"")}</div><h2>${esc(COURSES[d.course].short)} · ${p0.dow} ${p0.d}</h2>
-      <p class="muted small">${done?"Journée terminée : podiums figés.":"Qui finira 1er, 2e et 3e au Stableford aujourd'hui ? Les podiums des autres restent cachés jusqu'à la fin de la journée."}</p>
+      <p class="muted small">${done?lk.why:"Qui finira 1er, 2e et 3e au Stableford aujourd'hui ? "+lk.why+" Les podiums des autres restent cachés jusqu'à la fin de la journée."}</p>
       ${[0,1,2].map(i=>`<div class="prow" style="grid-template-columns:44px 1fr"><span style="font-size:1.4rem;text-align:center">${medals[i]}</span><select data-pod="${i}" ${done||!can?"disabled":""}><option value="">— choisir —</option>${ps.map(q=>`<option value="${q.id}" ${mine[i]===q.id?"selected":""} ${mine.includes(q.id)&&mine[i]!==q.id?"disabled":""}>${esc(q.nick)}</option>`).join("")}</select></div>`).join("")}
       ${submitted.length?`<p class="muted small">Ont déjà pronostiqué : ${submitted.map(esc).join(", ")}.</p>`:""}
     </div>`; }
@@ -1097,7 +1100,7 @@ function renderPronos(){
   $("#p-pronos").querySelectorAll("[data-pday]").forEach(b=>b.onclick=()=>{ S.pronoDay=b.dataset.pday; renderPronos(); });
   $("#p-pronos").querySelectorAll("[data-pscope]").forEach(b=>b.onclick=()=>{ S.pronoScope=b.dataset.pscope; renderPronos(); });
   const pm=$("#pickMe2"); if(pm) pm.onclick=openPickMe;
-  $("#p-pronos").querySelectorAll("select[data-pod]").forEach(sel=>sel.onchange=()=>{ const pod=podiumOf(d.id,me); pod[+sel.dataset.pod]=sel.value; const key="live/prono_"+d.id+"_"+me; S.pronos[pronoKey(d.id,me)]={...(S.pronos[pronoKey(d.id,me)]||{}),podium:pod};
+  $("#p-pronos").querySelectorAll("select[data-pod]").forEach(sel=>sel.onchange=()=>{ if(pronoLocked(d).locked){ toast("Pronos fermés"); renderPronos(); return; } const pod=podiumOf(d.id,me); pod[+sel.dataset.pod]=sel.value; const key="live/prono_"+d.id+"_"+me; S.pronos[pronoKey(d.id,me)]={...(S.pronos[pronoKey(d.id,me)]||{}),podium:pod};
     const prev=scoreWriteQ[key]||Promise.resolve(); scoreWriteQ[key]=prev.then(()=>S.db.doc(key).set({podium:pod, player:me, day:d.id, by:S.uid||"", ts:Date.now()})).catch(e=>{ console.error(e); toast("Enregistrement refusé"); }); renderPronos(); if(pod.every(Boolean)) toast("Podium enregistré"); });
 }
 
@@ -1311,7 +1314,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-112755";
+const BUILD="20261031-113715";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
