@@ -280,6 +280,9 @@ img{max-width:100%}
 .prow button{width:40px;height:40px;border-radius:9px;background:var(--surface);font-weight:900;font-size:1.2rem;box-shadow:var(--shadow)}
 .prow .v{font-family:var(--display);font-size:1.3rem;text-align:center}.prow .v.empty{color:var(--muted);font-size:.9rem}
 .prow.done{opacity:.85}
+.hstrip{display:grid;grid-template-columns:repeat(18,1fr);gap:2px;margin-top:4px;max-width:220px}
+.hstrip i{display:block;height:8px;border-radius:2px;background:var(--surface2)}
+.hstrip i.on{background:var(--pink)}.hstrip i.half{background:linear-gradient(90deg,var(--pink) 50%,var(--surface2) 50%)}
 .scsum{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
 .scsum div{background:var(--surface2);border-radius:10px;padding:6px 4px}
 .scsum b{display:block;font-family:var(--display);font-size:1.1rem}
@@ -567,6 +570,19 @@ function teamStb(d){ if(!CARDS[d.course]) return null; const card=CARDS[d.course
   const tot={A:0,B:0}; let holes=0;
   for(let i=0;i<18;i++){ let hole=false; for(const T of ["A","B"]){ const v=tp[T].map(p=>pts[p.id][i]).filter(x=>x!=null).sort((x,y)=>y-x).slice(0,3); if(v.length){ hole=true; tot[T]+=v.reduce((s,x)=>s+x,0); } } if(hole) holes++; }
   return {a:tot.A,b:tot.B,started:any,done:any&&complete,holes,total:18,kind:"stb"}; }
+function teamContrib(d){ // apport de chaque joueur au total de son équipe (3 meilleurs Stableford par trou) ; ex æquo à la coupure partagés
+  if(!CARDS[d.course]) return null; const card=CARDS[d.course]; const out={}; S.players.forEach(p=>out[p.id]={pts:0,holes:0,per:Array(18).fill(null)});
+  for(const T of ["A","B"]){ const tp=S.players.filter(p=>p.team===T); if(!tp.length) continue; const pts={}; tp.forEach(p=>{ const r=computeScore(d,p); pts[p.id]=r.holes.map((g,i)=>g==null?null:Math.max(0,2+card.par[i]+strokesOnHole(r.ph,card.si[i])-g)); });
+    for(let i=0;i<18;i++){ const v=tp.map(p=>({id:p.id,x:pts[p.id][i]})).filter(o=>o.x!=null).sort((a,b)=>b.x-a.x); if(!v.length) continue; const cut=v[Math.min(2,v.length-1)].x; const above=v.filter(o=>o.x>cut); const tied=v.filter(o=>o.x===cut); const slots=Math.min(3,v.length)-above.length; const share=slots/tied.length;
+      above.forEach(o=>{ out[o.id].pts+=o.x; out[o.id].holes+=1; out[o.id].per[i]={pts:o.x,w:1}; }); tied.forEach(o=>{ out[o.id].pts+=o.x*share; out[o.id].holes+=share; out[o.id].per[i]={pts:o.x*share,w:share}; }); } }
+  return out; }
+function contribRows(days){ const acc={}; S.players.forEach(p=>acc[p.id]={p,pts:0,holes:0,days:0}); for(const d of days){ const c=teamContrib(d); if(!c) continue; S.players.forEach(p=>{ if(!p.team) return; const r=computeScore(d,p); if(!r.n) return; acc[p.id].pts+=c[p.id].pts; acc[p.id].holes+=c[p.id].holes; acc[p.id].days++; }); }
+  return Object.values(acc).filter(x=>x.days>0).sort((a,b)=>b.pts-a.pts||b.holes-a.holes||a.p.order-b.p.order); }
+const fmt1 = v => Number.isInteger(v)?String(v):v.toFixed(1).replace(".",",");
+function contribCard(days,title,perHole){ const rows=contribRows(days); if(!rows.length) return ""; const d=days.length===1?days[0]:null; const c=d?teamContrib(d):null;
+  return `<div class="card"><div class="eyebrow">Apport à l'équipe · ${esc(title)}</div>
+    <div class="rank">${rows.map((x,i)=>`<span class="pos ${i<3?"top":""}">${i+1}</span><span class="nm"><b style="color:${x.p.team==="A"?"var(--teamA)":"var(--teamB)"}">${esc(x.p.nick)}</b><small>${fmt1(x.holes)} trou${x.holes>1?"s":""} retenu${x.holes>1?"s":""}${days.length>1?" · "+x.days+" j":""}</small>${perHole&&c?`<span class="hstrip">${c[x.p.id].per.map((h,k)=>`<i class="${h?(h.w<1?"half":"on"):""}" title="Trou ${k+1}${h?" : "+fmt1(h.pts)+" pt":""}"></i>`).join("")}</span>`:""}</span><span class="val num">${fmt1(x.pts)}</span><span class="thru">pts</span>`).join("")}</div>
+    <p class="muted small">Points Stableford réellement comptés dans le total de son équipe (3 meilleurs par trou). ${perHole?"Barre : un carré par trou, plein = retenu, à moitié = ex æquo partagé.":""}</p></div>`; }
 function daySummary(d){ const gd=golfDays(); const isFinal = gd.length && d.id===gd[gd.length-1].id; if(isFinal){ const s=liveSummary(d); return s?{...s,kind:"mp"}:null; } return teamStb(d); }
 function effResult(d){ if(d.result) return d.result; const s=daySummary(d); if(s && s.done){ return s.a>s.b?"A":s.b>s.a?"B":"draw"; } return ""; }
 function points(){ let a=0,b=0; for(const d of S.days){ const r=effResult(d); if(r==="A")a++; else if(r==="B")b++; else if(r==="draw"){a+=.5;b+=.5;} } return {a,b}; }
@@ -825,6 +841,7 @@ function renderBoard(){
     <div class="card" style="border-top:4px solid var(--teamB)"><b>${esc(S.cfg.teamB.name)}</b>${B.length?B.map(p=>`<div>${esc(p.nick)} <span class="muted small">${esc(p.name)}</span></div>`).join(""):'<span class="muted small">Tirage au sort au lounge</span>'}</div>
   </div>
   ${S.cfg.format?`<div class="card"><div class="eyebrow">Formule de jeu</div><p>${esc(S.cfg.format)}</p>${S.cfg.squabbit?`<a class="btn ghost" href="${esc(S.cfg.squabbit)}" target="_blank" rel="noopener">🐰 Ouvrir le tournoi sur Squabbit</a>`:""}</div>`:""}
+  ${contribCard(golfDays(),"semaine",false)}
   <div class="card"><div class="eyebrow">Course au MVP</div>
     <div class="bal">${mvp().map((p,i)=>`<span>${i<3&&p.pts>0?["🥇","🥈","🥉"][i]+" ":""}<b>${esc(p.nick)}</b> <span class="muted small">${p.days?`brut ${p.gross} · ${p.days} j${p.wins?" · "+p.wins+" victoire"+(p.wins>1?"s":""):""}`:"pas encore joué"}</span></span><span class="v num">${p.days?p.stb:"—"}</span>`).join("")}</div>
     <p class="muted small">Cumul des points Stableford de la semaine ; à égalité, le meilleur brut cumulé passe devant.</p></div>
@@ -970,7 +987,7 @@ function renderLive(){
   const ps=S.players.slice().sort((a,b)=>a.order-b.order);
   const fallback = matches.length ? "" : `<div class="card"><div class="eyebrow">Saisir les scores</div><p class="muted small">Les parties de cette journée ne sont pas encore constituées (Réglages). En attendant, choisis un joueur :</p>
     <div class="plist">${ps.map(q=>{ const r=computeScore(d,q); return `<button data-score="${q.id}" ${can?"":"disabled"}><span class="av">${avatarHtml(q)}</span><span>${esc(q.nick)}<br><small class="muted">${r.n?`${r.n} trou${r.n>1?"s":""} · brut ${r.gross} · net ${r.net}`:"pas encore de score"}</small></span><span class="tot num">${r.n?r.stb+" pts":"—"}</span></button>`; }).join("")}</div></div>`;
-  $("#p-live").innerHTML = chips+head+(rows?`<div class="stack">${rows}</div>${isFinal?`<p class="muted small" style="text-align:center">Dernière journée : match play. Appuie sur une partie pour les scores ; le bouton « Match play » y donne le trou gagné.</p>`:""}`:"")+fallback+rankingCard(d);
+  $("#p-live").innerHTML = chips+head+(rows?`<div class="stack">${rows}</div>${isFinal?`<p class="muted small" style="text-align:center">Dernière journée : match play. Appuie sur une partie pour les scores ; le bouton « Match play » y donne le trou gagné.</p>`:""}`:"")+fallback+rankingCard(d)+(isFinal?"":contribCard([d],COURSES[d.course].short+" · "+p.dow+" "+p.d,true));
   $("#p-live").querySelectorAll("[data-lday]").forEach(b=>b.onclick=()=>{ S.liveDay=b.dataset.lday; renderLive(); });
   $("#p-live").querySelectorAll("[data-ms]").forEach(b=>b.onclick=()=>{ const m=matches[+b.dataset.ms]; openScoreSheet(d.id, m.a[0], [...m.a,...m.b], +b.dataset.ms); });
   $("#p-live").querySelectorAll("[data-score]").forEach(b=>b.onclick=()=>openScoreSheet(d.id,b.dataset.score));
@@ -1343,7 +1360,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-212936";
+const BUILD="20261031-220718";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
