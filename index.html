@@ -1042,7 +1042,7 @@ function openScoreSheet(dayId,pid,group,matchIdx){
       <p class="muted small">${r.hcpMissing?"Index <b>manquant</b> (à renseigner dans Jambons → profil) · joue 0":"Index "+playerHcp(p)+" → <b>"+ph+" coup"+(Math.abs(ph)>1?"s":"")+"</b> sur ce parcours"+(rt?" (départs "+(TEE_FR[tee]||tee)+" "+rt.cr+" / "+rt.slope+")":" (sans slope)")} · ● = coup reçu</p>${teeChips}
       <div class="hgrid">${card.par.map((pr,i)=>{ const rec=strokesOnHole(ph,card.si[i]); const g=holes[i]; const pts=g==null?"":Math.max(0,2+pr+rec-g); const cls=g==null?"":g<pr?"under":g>pr?"over":"";
         const locked = g!=null && holes.slice(i+1).some(v=>v!=null) && !unlocked.has(pid+":"+i);
-        return `<div class="hrow ${cls} ${locked?"locked":""}"><span class="hn">${i+1}</span><span class="hi">Par ${pr} · idx ${card.si[i]}<br>${card.tees[tee][i]} m ${"<i></i>".repeat(Math.max(0,rec))}</span>${locked?`<span></span>`:`<button data-dec="${i}">−</button>`}<span><span class="v ${g==null?"empty":""} num">${g==null?"·":g}</span><div class="pts">${g==null?"":pts+" pt"+(pts>1?"s":"")}</div></span>${locked?`<button data-unlock="${i}" title="Corriger ce trou">✎</button>`:`<button data-inc="${i}">+</button>`}</div>`; }).join("")}</div>
+        return `<div class="hrow ${cls} ${locked?"locked":""}"><span class="hn">${i+1}</span><span class="hi">Par ${pr} · idx ${card.si[i]}<br>${card.tees[tee][i]} m ${"<i></i>".repeat(Math.max(0,rec))}</span>${locked?`<span></span>`:`<button data-dec="${i}">−</button>`}<span><span class="v ${g==null?"empty":""} num">${g==null?"·":pts===0?"✕":g}</span><div class="pts">${g==null?"":pts===0?"0 pt ("+g+")":pts+" pt"+(pts>1?"s":"")}</div></span>${locked?`<button data-unlock="${i}" title="Corriger ce trou">✎</button>`:`<button data-inc="${i}">+</button>`}</div>`; }).join("")}</div>
       <p class="muted small">Un trou se verrouille dès que le suivant est saisi. Pour corriger, appuie sur ✎ à droite du trou.</p><div class="grid2"><button class="btn ghost" id="fillPar">Pré-remplir les trous vides au par</button><button class="btn ghost" id="clearScore">Effacer toute la carte</button></div>`);
     const write=(arr,tee2)=>{ const key="live/score_"+dayId+"_"+pid; const cur=S.scores[scoreKey(dayId,pid)]||{}; const teeV=tee2||cur.tee||""; S.scores[scoreKey(dayId,pid)]={...cur,holes:arr,tee:teeV}; const prev=scoreWriteQ[key]||Promise.resolve(); scoreWriteQ[key]=prev.then(()=>S.db.doc(key).set({holes:arr.map(v=>v==null?null:v), tee:teeV, player:pid, day:dayId, by:S.uid||"", ts:Date.now()})).catch(e=>{ console.error(e); toast("Enregistrement refusé"); }); };
     const upd=(i,delta)=>{ const arr=holes.slice(); const pr=card.par[i]; let v=arr[i]==null?pr:arr[i]; v=Math.max(1,Math.min(15,v+delta)); if(arr[i]==null && delta===0) v=pr; arr[i]=v; S.scores[scoreKey(dayId,pid)]={...(S.scores[scoreKey(dayId,pid)]||{}),holes:arr}; write(arr); draw(); };
@@ -1185,7 +1185,7 @@ $("#fileIn").addEventListener("change", async e=>{
 function shrink(file,max){ return new Promise((res,rej)=>{ const img=new Image(); const url=URL.createObjectURL(file); img.onload=()=>{ const s=Math.min(1,max/Math.max(img.width,img.height)); const c=document.createElement("canvas"); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext("2d").drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url); c.toBlob(b=>b?res(b):rej(new Error("canvas")),"image/jpeg",.72); }; img.onerror=rej; img.src=url; }); }
 
 // ---------- Feuilles (dialogues) ----------
-function sheet(html){ closeSheet(); const d=document.createElement("div"); d.className="sheet"; d.id="sheet"; d.innerHTML=`<div class="in">${html}</div>`; d.onclick=e=>{ if(e.target===d) closeSheet(); }; document.body.appendChild(d); d.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheet); }
+function sheet(html){ const prevIn=$("#sheet .in"); const keep=prevIn?prevIn.scrollTop:0; closeSheet(); const d=document.createElement("div"); d.className="sheet"; d.id="sheet"; d.innerHTML=`<div class="in">${html}</div>`; d.onclick=e=>{ if(e.target===d) closeSheet(); }; document.body.appendChild(d); if(keep) d.querySelector(".in").scrollTop=keep; d.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheet); }
 function closeSheet(){ const wasScore=!!scoreSheet; $("#sheet")?.remove(); liveSheet=null; scoreSheet=null; if(wasScore && S.tab==="live") renderLive(); }
 function confirmSheet(q,fn){ sheet(`<h3>${esc(q)}</h3><div class="grid2"><button class="btn ghost" data-close>Non</button><button class="btn primary" id="yes">Oui</button></div>`); $("#yes").onclick=async()=>{ closeSheet(); await fn(); }; }
 
@@ -1330,7 +1330,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-210134";
+const BUILD="20261031-210623";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
