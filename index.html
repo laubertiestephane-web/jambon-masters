@@ -669,7 +669,7 @@ function wxDay(j, dayId){ if(!j||!j.daily) return null; const i=j.daily.time.ind
 function teeHour(d){ const m=(d.teeTime||"").match(/(\d{1,2})\s*[h:]/); return m?+m[1]:13; }
 function radioCard(){ if(!RADIO.length) return ""; const eps=RADIO.slice().sort((a,b)=>b.day.localeCompare(a.day)); const e=eps[0]; const p=dparts(e.day);
   return `<div class="card" style="background:linear-gradient(135deg,var(--navy),#2a3190);color:#fff"><div class="eyebrow" style="color:#ffb3d1">📻 Radio Jambon · le compte rendu du soir</div><h2 style="color:#fff">${esc(e.title)} · ${p.dow} ${p.d} ${p.mon}</h2>
-    <audio controls preload="none" src="${e.file}?v=${BUILD}" style="width:100%;margin:8px 0 4px"></audio>
+    <audio controls preload="none" src="${e.file}" style="width:100%;margin:8px 0 4px"></audio>
     <div class="row" style="justify-content:space-between"><span class="small" style="opacity:.85">${esc(e.dur)} · deux voix, zéro langue de bois</span><a class="btn sm" style="background:var(--pink);color:#fff" href="${e.file}" download>Télécharger</a></div>
     ${eps.length>1?`<p class="small" style="margin-top:8px;opacity:.9">Épisodes précédents : ${eps.slice(1).map(x=>`<a href="${x.file}" style="color:#fff;text-decoration:underline">${esc(x.title)}</a>`).join(" · ")}</p>`:""}</div>`; }
 function weatherCard(){
@@ -1343,7 +1343,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-212532";
+const BUILD="20261031-212936";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
