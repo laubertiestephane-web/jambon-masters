@@ -285,7 +285,10 @@ img{max-width:100%}
 .hstrip i.on{background:var(--pink)}.hstrip i.half{background:linear-gradient(90deg,var(--pink) 50%,var(--surface2) 50%)}
 .birdie-banner{position:fixed;left:12px;right:12px;top:-80px;z-index:60;background:var(--pink);color:#fff;font-family:var(--display);font-size:1.15rem;text-align:center;padding:14px 16px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:top .35s cubic-bezier(.2,.8,.2,1)}
 .birdie-banner.eagle{background:var(--navy)}
-.birdie-banner.show{top:calc(10px + env(safe-area-inset-top,0px))}
+.birdie-banner.show{top:calc(10px + env(safe-area-inset-top,0px) + var(--i,0)*64px)}
+.birdie-banner.gone{top:-120px}
+.birdie-banner small{display:block;font-family:var(--sans,inherit);font-size:.7rem;font-weight:600;opacity:.85;margin-top:2px}
+.birdie-banner::before{content:"";position:absolute;left:50%;top:6px;width:36px;height:4px;margin-left:-18px;border-radius:2px;background:rgba(255,255,255,.6)}
 .scsum{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
 .scsum div{background:var(--surface2);border-radius:10px;padding:6px 4px}
 .scsum b{display:block;font-family:var(--display);font-size:1.1rem}
@@ -754,7 +757,7 @@ function renderHome(){
   const meP = playerById(myPlayerId());
   const welcome = meP ? ""
     : `<div class="welcome"><h2>Bienvenue à toi, petit jambon !</h2><span class="small">Dis-nous qui tu es : l'appli te reconnaîtra à chaque ouverture.</span><button class="btn primary" id="pickMe" style="justify-self:start;margin-top:6px">C'est moi…</button></div>`;
-  const html = `${welcome}${installCard()}${top}<div class="chips" style="margin:-4px 0 4px"><button class="chip" id="birdieToggle">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button><button class="chip" id="cartToggle" aria-pressed="${cartMode}">🛺 Mode voiturette${cartMode?" : actif":""}</button></div>${cartMode?`<p class="muted small" style="margin:-2px 0 6px">Écran maintenu allumé et alertes gardées actives même téléphone verrouillé. Volume média à fond !</p>`:""}${radioCard()}${weatherCard()}
+  const html = `${welcome}${installCard()}${top}<div class="chips" style="margin:-4px 0 4px"><button class="chip" id="birdieToggle">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button><button class="chip" id="cartToggle" aria-pressed="${cartMode}">🛺 Mode voiturette${cartMode?" : actif":cartWanted()?" : touche l'écran pour réactiver":""}</button></div>${cartMode?`<p class="muted small" style="margin:-2px 0 6px">Écran maintenu allumé et alertes gardées actives même téléphone verrouillé. Volume média à fond !</p>`:""}${radioCard()}${weatherCard()}
   <div class="card"><div class="eyebrow">Jambon Masters · classement par équipe</div>
     <div class="score">
       <div class="team"><span class="name"><span class="dot" style="background:var(--teamA)"></span> ${esc(S.cfg.teamA.name)}</span><span class="pts num">${fmtPts(a)}</span></div>
@@ -1091,32 +1094,36 @@ let birdieArmed=false, birdieReady=false, birdieT0=Date.now(); const birdieAudio
 function birdieSoundOn(){ try{ return localStorage.getItem("jm.birdieSound")!=="off"; }catch{ return true; } }
 function toggleBirdieSound(){ const on=!birdieSoundOn(); try{ localStorage.setItem("jm.birdieSound",on?"on":"off"); }catch{} toast(on?"🔔 Jingle birdie activé sur ce téléphone":"🔕 Jingle birdie coupé sur ce téléphone (la bannière reste)"); render(); }
 function armBirdie(){ if(birdieArmed) return; birdieArmed=true; ["birdie","eagle"].forEach(k=>{ const a=new Audio("radio/"+k+".mp3?v=3"); a.preload="auto"; birdieAudio[k]=a; }); // iOS : débloquer l'audio au premier geste
-  const unlock=()=>{ Object.values(birdieAudio).forEach(a=>{ a.muted=true; a.play().then(()=>{ a.pause(); a.currentTime=0; a.muted=false; }).catch(()=>{ a.muted=false; }); }); document.removeEventListener("touchend",unlock); document.removeEventListener("click",unlock); };
+  const unlock=()=>{ Object.values(birdieAudio).forEach(a=>{ try{ a.volume=1; const pr=a.play(); if(pr) pr.then(()=>{ setTimeout(()=>{ a.pause(); a.currentTime=0; },30); }).catch(()=>{}); }catch(_){} }); if(cartWanted() && !cartMode) setCartMode(true,true); document.removeEventListener("touchend",unlock); document.removeEventListener("click",unlock); };
   document.addEventListener("touchend",unlock,{once:true}); document.addEventListener("click",unlock,{once:true}); }
+function cartWanted(){ try{ return localStorage.getItem("jm.cart")==="on"; }catch{ return false; } }
 // ---------- Mode voiturette : écran allumé + session audio maintenue en arrière-plan ----------
 let cartMode=false, wakeLock=null, bgAudio=null;
-async function setCartMode(on){ cartMode=on;
+async function setCartMode(on,silent){ cartMode=on; try{ localStorage.setItem("jm.cart",on?"on":"off"); }catch{}
   if(on){ try{ if(!bgAudio){ bgAudio=new Audio("radio/silence.mp3"); bgAudio.loop=true; bgAudio.volume=1; } await bgAudio.play(); }catch(e){ console.warn("bg audio",e); }
     try{ if("mediaSession" in navigator){ navigator.mediaSession.metadata=new MediaMetadata({title:"Alertes birdie en veille",artist:"Jambon Masters",album:"Radio Jambon"}); navigator.mediaSession.playbackState="playing"; navigator.mediaSession.setActionHandler("pause",()=>setCartMode(false)); navigator.mediaSession.setActionHandler("play",()=>setCartMode(true)); } }catch(_){}
     try{ if("wakeLock" in navigator){ wakeLock=await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release",()=>{ wakeLock=null; }); } }catch(e){ console.warn("wakelock",e); }
-    toast("🛺 Mode voiturette : écran allumé, alertes actives"); }
-  else { try{ bgAudio&&bgAudio.pause(); }catch(_){} try{ wakeLock&&wakeLock.release(); }catch(_){} wakeLock=null; try{ if("mediaSession" in navigator) navigator.mediaSession.playbackState="none"; }catch(_){} toast("Mode voiturette désactivé"); }
+    if(!silent) toast("🛺 Mode voiturette : écran allumé, alertes actives"); }
+  else { try{ bgAudio&&bgAudio.pause(); }catch(_){} try{ wakeLock&&wakeLock.release(); }catch(_){} wakeLock=null; try{ if("mediaSession" in navigator) navigator.mediaSession.playbackState="none"; }catch(_){} if(!silent) toast("Mode voiturette désactivé"); }
   render(); }
 document.addEventListener("visibilitychange",async()=>{ if(document.visibilityState==="visible" && cartMode){ try{ if(!wakeLock && "wakeLock" in navigator) wakeLock=await navigator.wakeLock.request("screen"); }catch(_){} try{ bgAudio&&bgAudio.paused&&await bgAudio.play(); }catch(_){} } });
+function showBanner(msg,kind){ const b=document.createElement("div"); b.className="birdie-banner "+kind; b.innerHTML=`<span>${msg}</span><small>pousse vers le haut pour fermer</small>`; document.body.appendChild(b);
+  const stack=[...document.querySelectorAll(".birdie-banner")]; stack.forEach((el,i)=>el.style.setProperty("--i",String(stack.length-1-i)));
+  setTimeout(()=>b.classList.add("show"),20); let y0=null; const close=()=>{ b.classList.remove("show"); b.classList.add("gone"); setTimeout(()=>{ b.remove(); [...document.querySelectorAll(".birdie-banner")].reverse().forEach((el,i)=>el.style.setProperty("--i",String(i))); },350); };
+  b.addEventListener("touchstart",e=>{ y0=e.touches[0].clientY; },{passive:true}); b.addEventListener("touchmove",e=>{ if(y0!==null && y0-e.touches[0].clientY>40){ y0=null; close(); } },{passive:true}); b.addEventListener("dblclick",close); }
 function playAlarm(kind){ const src="radio/"+kind+".mp3?v=3";
   if(cartMode && bgAudio){ // réutiliser la piste déjà autorisée (fonctionne en arrière-plan)
     try{ bgAudio.loop=false; bgAudio.src=src; bgAudio.onended=()=>{ bgAudio.onended=null; bgAudio.src="radio/silence.mp3"; bgAudio.loop=true; bgAudio.play().catch(()=>{}); }; bgAudio.play().catch(()=>{}); return; }catch(_){} }
-  const a=birdieAudio[kind]; if(a){ try{ a.volume=1; boostAudio(a); a.currentTime=0; a.play().catch(()=>{}); }catch(_){} } }
+  const a=birdieAudio[kind]; if(a){ try{ a.volume=1; a.currentTime=0; a.play().catch(()=>{}); }catch(_){} } }
 function birdieWatch(prev){ if(!birdieReady){ birdieReady=true; return; } if(Date.now()-birdieT0<10000) return; // pas d'alerte dans les 10 s qui suivent l'ouverture (cache → serveur)
   const t=todayId(); const now=Date.now(); const d=S.days.find(x=>x.id===t); if(!d||!CARDS[d.course]) return; const card=CARDS[d.course]; const me=myPlayerId(); const ev=[];
   for(const [k,v] of Object.entries(S.scores)){ if(!k.startsWith(t+"_")) continue; if(!v.ts || now-v.ts>120000) continue; /* seulement les saisies de moins de 2 min */ const pid=k.slice(t.length+1); const old=(prev[k]&&prev[k].holes)||[]; const nh=v.holes||[];
     nh.forEach((g,i)=>{ if(g==null||old[i]===g) return; const diff=g-card.par[i]; if(diff<=-1 && (old[i]==null || old[i]-card.par[i]>-1)){ ev.push({pid,hole:i+1,diff}); } }); }
   if(!ev.length) return; const e=ev[0]; const p=playerById(e.pid); if(!p) return; const kind=e.diff<=-2?"eagle":"birdie"; const label=e.diff<=-3?"ALBATROS":e.diff===-2?"EAGLE":"Birdie";
   const self = e.pid===me; const msg=`${kind==="eagle"?"🦅":"🐦"} ${label} pour ${esc(p.nick)} au ${e.hole} !${ev.length>1?" (+"+(ev.length-1)+")":""}`;
-  const b=document.createElement("div"); b.className="birdie-banner "+kind; b.innerHTML=`<span>${msg}</span>`; document.body.appendChild(b); setTimeout(()=>b.classList.add("show"),20); setTimeout(()=>{ b.classList.remove("show"); setTimeout(()=>b.remove(),400); },4500);
+  showBanner(msg,kind);
   try{ if(navigator.vibrate) navigator.vibrate(kind==="eagle"?[120,60,120,60,300]:[80,40,160]); }catch(_){}
   if(!self && birdieSoundOn()) playAlarm(kind); }
-function boostAudio(a){ try{ if(a._boosted) { if(a._ctx&&a._ctx.state==="suspended") a._ctx.resume(); return; } const C=window.AudioContext||window.webkitAudioContext; if(!C) return; const ctx=new C(); const src=ctx.createMediaElementSource(a); const g=ctx.createGain(); g.gain.value=2.2; const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-6; comp.ratio.value=12; src.connect(g).connect(comp).connect(ctx.destination); a._boosted=true; a._ctx=ctx; if(ctx.state==="suspended") ctx.resume(); }catch(_){} }
 
 // ---------- Pronos (podium du jour) ----------
 const PODIUM_PTS = {exact:3, inPodium:1, bonusOrder:3}; // place exacte 3 pts, dans le podium mais mauvaise place 1 pt, podium complet dans l'ordre +3 → max 12
@@ -1400,7 +1407,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261101-105631";
+const BUILD="20261101-114427";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
