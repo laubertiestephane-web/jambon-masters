@@ -283,6 +283,9 @@ img{max-width:100%}
 .hstrip{display:grid;grid-template-columns:repeat(18,1fr);gap:2px;margin-top:4px;max-width:220px}
 .hstrip i{display:block;height:8px;border-radius:2px;background:var(--surface2)}
 .hstrip i.on{background:var(--pink)}.hstrip i.half{background:linear-gradient(90deg,var(--pink) 50%,var(--surface2) 50%)}
+.birdie-banner{position:fixed;left:12px;right:12px;top:-80px;z-index:60;background:var(--pink);color:#fff;font-family:var(--display);font-size:1.15rem;text-align:center;padding:14px 16px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:top .35s cubic-bezier(.2,.8,.2,1)}
+.birdie-banner.eagle{background:var(--navy)}
+.birdie-banner.show{top:calc(10px + env(safe-area-inset-top,0px))}
 .scsum{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
 .scsum div{background:var(--surface2);border-radius:10px;padding:6px 4px}
 .scsum b{display:block;font-family:var(--display);font-size:1.1rem}
@@ -1083,6 +1086,21 @@ function openScoreSheet(dayId,pid,group,matchIdx){
   draw();
 }
 
+// ---------- Alerte birdie (app ouverte) ----------
+let birdieArmed=false, birdieReady=false; const birdieAudio={};
+function armBirdie(){ if(birdieArmed) return; birdieArmed=true; ["birdie","eagle"].forEach(k=>{ const a=new Audio("radio/"+k+".mp3"); a.preload="auto"; birdieAudio[k]=a; }); // iOS : débloquer l'audio au premier geste
+  const unlock=()=>{ Object.values(birdieAudio).forEach(a=>{ a.muted=true; a.play().then(()=>{ a.pause(); a.currentTime=0; a.muted=false; }).catch(()=>{ a.muted=false; }); }); document.removeEventListener("touchend",unlock); document.removeEventListener("click",unlock); };
+  document.addEventListener("touchend",unlock,{once:true}); document.addEventListener("click",unlock,{once:true}); }
+function birdieWatch(prev){ if(!birdieReady){ birdieReady=true; return; } // premier chargement : pas d'alerte sur l'historique
+  const t=todayId(); const d=S.days.find(x=>x.id===t); if(!d||!CARDS[d.course]) return; const card=CARDS[d.course]; const me=myPlayerId(); const ev=[];
+  for(const [k,v] of Object.entries(S.scores)){ if(!k.startsWith(t+"_")) continue; const pid=k.slice(t.length+1); const old=(prev[k]&&prev[k].holes)||[]; const nh=v.holes||[];
+    nh.forEach((g,i)=>{ if(g==null||old[i]===g) return; const diff=g-card.par[i]; if(diff<=-1 && (old[i]==null || old[i]-card.par[i]>-1)){ ev.push({pid,hole:i+1,diff}); } }); }
+  if(!ev.length) return; const e=ev[0]; const p=playerById(e.pid); if(!p) return; const kind=e.diff<=-2?"eagle":"birdie"; const label=e.diff<=-3?"ALBATROS":e.diff===-2?"EAGLE":"Birdie";
+  const self = e.pid===me; const msg=`${kind==="eagle"?"🦅":"🐦"} ${label} pour ${esc(p.nick)} au ${e.hole} !${ev.length>1?" (+"+(ev.length-1)+")":""}`;
+  const b=document.createElement("div"); b.className="birdie-banner "+kind; b.innerHTML=`<span>${msg}</span>`; document.body.appendChild(b); setTimeout(()=>b.classList.add("show"),20); setTimeout(()=>{ b.classList.remove("show"); setTimeout(()=>b.remove(),400); },4500);
+  try{ if(navigator.vibrate) navigator.vibrate(kind==="eagle"?[120,60,120,60,300]:[80,40,160]); }catch(_){}
+  const a=birdieAudio[kind]; if(a && !self){ try{ a.currentTime=0; a.play().catch(()=>{}); }catch(_){} } }
+
 // ---------- Pronos (podium du jour) ----------
 const PODIUM_PTS = {exact:3, inPodium:1, bonusOrder:3}; // place exacte 3 pts, dans le podium mais mauvaise place 1 pt, podium complet dans l'ordre +3 → max 12
 function pronoKey(dayId,pid){ return dayId+"_"+pid; }
@@ -1340,7 +1358,7 @@ function recomputeOwner(){
   if(S.isOwner && !was){ toast("Bonjour l'organisateur !"); if(S.db){ seedIfEmpty(S.db); if(!reqSubStarted){ reqSubStarted=true; S.db.collection("adminRequests").onSnapshot(s=>{ S.adminRequests=s.docs.map(x=>({...x.data(), id:x.id})); if(S.tab==="admin") renderAdmin(); }, e=>console.warn("req",e)); } } }
   if(S.isOwner!==was){ renderTabs(); render(); }
 }
-function startSubs(db){ if(subsStarted) return; subsStarted=true;
+function startSubs(db){ if(subsStarted) return; subsStarted=true; armBirdie();
   const sub=(ref,fn)=>ref.onSnapshot(s=>{fn(s); S.dbReady=true; if(S.tab!=="admin") render();}, e=>console.warn("db",e));
   sub(db.doc("config/main"), s=>{ if(s.exists){ const d=s.data(); S.cfg={...DEFAULT_CFG,...d, teamA:{...DEFAULT_CFG.teamA,...(d.teamA||{})}, teamB:{...DEFAULT_CFG.teamB,...(d.teamB||{})}}; ["out1","out2","ret1","ret2"].forEach(k=>S.cfg[k]={...DEFAULT_CFG[k],...(d[k]||{})}); } });
   sub(db.doc("config/main"), s=>{ if(!S.fx.live && S.cfg.rate>0) S.fx.rate=S.cfg.rate; });
@@ -1353,7 +1371,7 @@ function startSubs(db){ if(subsStarted) return; subsStarted=true;
   sub(db.collection("profiles"), s=>{ S.profiles={}; s.docs.forEach(x=>S.profiles[x.id]=x.data()); });
   sub(db.collection("expenses"), s=>{ S.expenses = s.docs.map(x=>({...x.data(), id:x.id})); });
   sub(db.collection("wall"), s=>{ S.wall = s.docs.map(x=>({...x.data(), id:x.id})); });
-  sub(db.collection("live"), s=>{ S.live={}; S.scores={}; S.pronos={}; s.docs.forEach(x=>{ if(x.id.startsWith("score_")){ S.scores[x.id.slice(6)]=x.data(); } else if(x.id.startsWith("prono_")){ S.pronos[x.id.slice(6)]=x.data(); } else S.live[x.id]=x.data(); }); if(scoreSheet && scoreSheet.redraw && $("#sheet")) scoreSheet.redraw(); if((S.tab==="live"||S.tab==="pronos") && !$("#sheet")) render(); if(liveSheet && liveSheet.redraw && $("#sheet")) liveSheet.redraw(); });
+  sub(db.collection("live"), s=>{ S.live={}; S.scores={}; S.pronos={}; const prevScores=S.scores; s.docs.forEach(x=>{ if(x.id.startsWith("score_")){ S.scores[x.id.slice(6)]=x.data(); } else if(x.id.startsWith("prono_")){ S.pronos[x.id.slice(6)]=x.data(); } else S.live[x.id]=x.data(); }); if(scoreSheet && scoreSheet.redraw && $("#sheet")) scoreSheet.redraw(); if((S.tab==="live"||S.tab==="pronos") && !$("#sheet")) render(); birdieWatch(prevScores); if(liveSheet && liveSheet.redraw && $("#sheet")) liveSheet.redraw(); });
 }
 async function seedIfEmpty(db){
   try{ const ps=await db.collection("players").get(); if(!ps.empty) return;
@@ -1365,7 +1383,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261101-092558";
+const BUILD="20261101-102850";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
