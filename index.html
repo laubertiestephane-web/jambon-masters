@@ -546,7 +546,7 @@ function playerTee(d,pid){ const card=CARDS[d.course]; if(!card) return ""; cons
 function dayTee(d){ const card=CARDS[d.course]; if(!card) return ""; const tees=Object.keys(card.tees); return (d.tee && tees.includes(d.tee)) ? d.tee : (tees.includes("White")?"White":tees[0]); }
 function ratingFor(course,tee){ const o=((S.cfg.ratings||{})[course]||{})[tee] || (RATINGS[course]||{})[tee]; if(!o) return null; const cr=parseFloat(o[0]), sl=parseFloat(o[1]); return (cr>0&&sl>0)?{cr,slope:sl}:null; }
 // Épisodes Radio Jambon (fichiers dans /radio/)
-const RADIO = [ {day:"2026-11-01", title:"J2 · Knysna GC · avant-match", file:"radio/2026-11-01-avant.mp3?v=2", dur:"2 min 57"}, {day:"2026-10-31", title:"J1 · Simola · compte rendu", file:"radio/2026-10-31.mp3?v=2", dur:"4 min 41"} ];
+const RADIO = [ {day:"2026-11-01", title:"J2 · Knysna GC · compte rendu", file:"radio/2026-11-01.mp3", dur:"4 min 31"}, {day:"2026-11-01", title:"J2 · Knysna GC · avant-match", file:"radio/2026-11-01-avant.mp3?v=2", dur:"2 min 57"}, {day:"2026-10-31", title:"J1 · Simola · compte rendu", file:"radio/2026-10-31.mp3?v=2", dur:"4 min 41"} ];
 const VILLA = {name:"Cloud 9 Villa", estate:"Pezula Golf Estate", addr:"Welbedacht Lane, Rexford, Knysna 6571", phone:"+27 83 459 4540", maps:"Cloud+9+Estate+Welbedacht+Lane+Rexford+Knysna"};
 const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, Knysna Rd, George 6530", maps:"Shop+55+Eden+Meander+Lifestyle+Centre+Knysna+Rd+George+6530"};
 
@@ -1421,7 +1421,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261101-131646";
+const BUILD="20261101-221905";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
