@@ -1090,7 +1090,7 @@ function openScoreSheet(dayId,pid,group,matchIdx){
 let birdieArmed=false, birdieReady=false, birdieT0=Date.now(); const birdieAudio={};
 function birdieSoundOn(){ try{ return localStorage.getItem("jm.birdieSound")!=="off"; }catch{ return true; } }
 function toggleBirdieSound(){ const on=!birdieSoundOn(); try{ localStorage.setItem("jm.birdieSound",on?"on":"off"); }catch{} toast(on?"🔔 Jingle birdie activé sur ce téléphone":"🔕 Jingle birdie coupé sur ce téléphone (la bannière reste)"); render(); }
-function armBirdie(){ if(birdieArmed) return; birdieArmed=true; ["birdie","eagle"].forEach(k=>{ const a=new Audio("radio/"+k+".mp3"); a.preload="auto"; birdieAudio[k]=a; }); // iOS : débloquer l'audio au premier geste
+function armBirdie(){ if(birdieArmed) return; birdieArmed=true; ["birdie","eagle"].forEach(k=>{ const a=new Audio("radio/"+k+".mp3?v=3"); a.preload="auto"; birdieAudio[k]=a; }); // iOS : débloquer l'audio au premier geste
   const unlock=()=>{ Object.values(birdieAudio).forEach(a=>{ a.muted=true; a.play().then(()=>{ a.pause(); a.currentTime=0; a.muted=false; }).catch(()=>{ a.muted=false; }); }); document.removeEventListener("touchend",unlock); document.removeEventListener("click",unlock); };
   document.addEventListener("touchend",unlock,{once:true}); document.addEventListener("click",unlock,{once:true}); }
 function birdieWatch(prev){ if(!birdieReady){ birdieReady=true; return; } if(Date.now()-birdieT0<10000) return; // pas d'alerte dans les 10 s qui suivent l'ouverture (cache → serveur)
@@ -1101,7 +1101,8 @@ function birdieWatch(prev){ if(!birdieReady){ birdieReady=true; return; } if(Dat
   const self = e.pid===me; const msg=`${kind==="eagle"?"🦅":"🐦"} ${label} pour ${esc(p.nick)} au ${e.hole} !${ev.length>1?" (+"+(ev.length-1)+")":""}`;
   const b=document.createElement("div"); b.className="birdie-banner "+kind; b.innerHTML=`<span>${msg}</span>`; document.body.appendChild(b); setTimeout(()=>b.classList.add("show"),20); setTimeout(()=>{ b.classList.remove("show"); setTimeout(()=>b.remove(),400); },4500);
   try{ if(navigator.vibrate) navigator.vibrate(kind==="eagle"?[120,60,120,60,300]:[80,40,160]); }catch(_){}
-  const a=birdieAudio[kind]; if(a && !self && birdieSoundOn()){ try{ a.currentTime=0; a.play().catch(()=>{}); }catch(_){} } }
+  const a=birdieAudio[kind]; if(a && !self && birdieSoundOn()){ try{ a.volume=1; boostAudio(a); a.currentTime=0; a.play().catch(()=>{}); }catch(_){} } }
+function boostAudio(a){ try{ if(a._boosted) { if(a._ctx&&a._ctx.state==="suspended") a._ctx.resume(); return; } const C=window.AudioContext||window.webkitAudioContext; if(!C) return; const ctx=new C(); const src=ctx.createMediaElementSource(a); const g=ctx.createGain(); g.gain.value=2.2; const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-6; comp.ratio.value=12; src.connect(g).connect(comp).connect(ctx.destination); a._boosted=true; a._ctx=ctx; if(ctx.state==="suspended") ctx.resume(); }catch(_){} }
 
 // ---------- Pronos (podium du jour) ----------
 const PODIUM_PTS = {exact:3, inPodium:1, bonusOrder:3}; // place exacte 3 pts, dans le podium mais mauvaise place 1 pt, podium complet dans l'ordre +3 → max 12
@@ -1385,7 +1386,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261101-104738";
+const BUILD="20261101-105450";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
