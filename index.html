@@ -754,7 +754,7 @@ function renderHome(){
   const meP = playerById(myPlayerId());
   const welcome = meP ? ""
     : `<div class="welcome"><h2>Bienvenue à toi, petit jambon !</h2><span class="small">Dis-nous qui tu es : l'appli te reconnaîtra à chaque ouverture.</span><button class="btn primary" id="pickMe" style="justify-self:start;margin-top:6px">C'est moi…</button></div>`;
-  const html = `${welcome}${installCard()}${top}${radioCard()}${weatherCard()}
+  const html = `${welcome}${installCard()}${top}<button class="chip" id="birdieToggle" style="justify-self:start;margin:-4px 0 4px">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button>${radioCard()}${weatherCard()}
   <div class="card"><div class="eyebrow">Jambon Masters · classement par équipe</div>
     <div class="score">
       <div class="team"><span class="name"><span class="dot" style="background:var(--teamA)"></span> ${esc(S.cfg.teamA.name)}</span><span class="pts num">${fmtPts(a)}</span></div>
@@ -770,7 +770,7 @@ function renderHome(){
   ${!S.dbReady ? `<p class="muted small" style="text-align:center">Connexion…</p>`:""}
   ${S.isOwner?"":`<button class="adminlink" id="adminLogin">Connexion organisateur</button>`}`;
   $("#p-home").innerHTML = html; bindPhotos($("#p-home"));
-  bindInstall(); const gl=$("#goLive"); if(gl) gl.onclick=()=>setTab("live"); const pm=$("#pickMe"); if(pm) pm.onclick=openPickMe; const al=$("#adminLogin"); if(al) al.onclick=adminLogin;
+  bindInstall(); const gl=$("#goLive"); if(gl) gl.onclick=()=>setTab("live"); const bt=$("#birdieToggle"); if(bt) bt.onclick=toggleBirdieSound; const pm=$("#pickMe"); if(pm) pm.onclick=openPickMe; const al=$("#adminLogin"); if(al) al.onclick=adminLogin;
 }
 
 function flightRow(f){ return `<div class="flight"><span class="t num">${esc(f.dep)} → ${esc(f.arr)}</span><div><span class="cities">${esc(f.from)} → ${esc(f.to)}</span><br><span class="muted small">${f.no?esc(f.no)+" · ":"<i>n° de vol à confirmer</i> · "}${esc(f.date)}${f.note?" · "+esc(f.note):""}</span></div></div>`; }
@@ -1087,19 +1087,21 @@ function openScoreSheet(dayId,pid,group,matchIdx){
 }
 
 // ---------- Alerte birdie (app ouverte) ----------
-let birdieArmed=false, birdieReady=false; const birdieAudio={};
+let birdieArmed=false, birdieReady=false, birdieT0=Date.now(); const birdieAudio={};
+function birdieSoundOn(){ try{ return localStorage.getItem("jm.birdieSound")!=="off"; }catch{ return true; } }
+function toggleBirdieSound(){ const on=!birdieSoundOn(); try{ localStorage.setItem("jm.birdieSound",on?"on":"off"); }catch{} toast(on?"🔔 Jingle birdie activé sur ce téléphone":"🔕 Jingle birdie coupé sur ce téléphone (la bannière reste)"); render(); }
 function armBirdie(){ if(birdieArmed) return; birdieArmed=true; ["birdie","eagle"].forEach(k=>{ const a=new Audio("radio/"+k+".mp3"); a.preload="auto"; birdieAudio[k]=a; }); // iOS : débloquer l'audio au premier geste
   const unlock=()=>{ Object.values(birdieAudio).forEach(a=>{ a.muted=true; a.play().then(()=>{ a.pause(); a.currentTime=0; a.muted=false; }).catch(()=>{ a.muted=false; }); }); document.removeEventListener("touchend",unlock); document.removeEventListener("click",unlock); };
   document.addEventListener("touchend",unlock,{once:true}); document.addEventListener("click",unlock,{once:true}); }
-function birdieWatch(prev){ if(!birdieReady){ birdieReady=true; return; } // premier chargement : pas d'alerte sur l'historique
-  const t=todayId(); const d=S.days.find(x=>x.id===t); if(!d||!CARDS[d.course]) return; const card=CARDS[d.course]; const me=myPlayerId(); const ev=[];
-  for(const [k,v] of Object.entries(S.scores)){ if(!k.startsWith(t+"_")) continue; const pid=k.slice(t.length+1); const old=(prev[k]&&prev[k].holes)||[]; const nh=v.holes||[];
+function birdieWatch(prev){ if(!birdieReady){ birdieReady=true; return; } if(Date.now()-birdieT0<10000) return; // pas d'alerte dans les 10 s qui suivent l'ouverture (cache → serveur)
+  const t=todayId(); const now=Date.now(); const d=S.days.find(x=>x.id===t); if(!d||!CARDS[d.course]) return; const card=CARDS[d.course]; const me=myPlayerId(); const ev=[];
+  for(const [k,v] of Object.entries(S.scores)){ if(!k.startsWith(t+"_")) continue; if(!v.ts || now-v.ts>120000) continue; /* seulement les saisies de moins de 2 min */ const pid=k.slice(t.length+1); const old=(prev[k]&&prev[k].holes)||[]; const nh=v.holes||[];
     nh.forEach((g,i)=>{ if(g==null||old[i]===g) return; const diff=g-card.par[i]; if(diff<=-1 && (old[i]==null || old[i]-card.par[i]>-1)){ ev.push({pid,hole:i+1,diff}); } }); }
   if(!ev.length) return; const e=ev[0]; const p=playerById(e.pid); if(!p) return; const kind=e.diff<=-2?"eagle":"birdie"; const label=e.diff<=-3?"ALBATROS":e.diff===-2?"EAGLE":"Birdie";
   const self = e.pid===me; const msg=`${kind==="eagle"?"🦅":"🐦"} ${label} pour ${esc(p.nick)} au ${e.hole} !${ev.length>1?" (+"+(ev.length-1)+")":""}`;
   const b=document.createElement("div"); b.className="birdie-banner "+kind; b.innerHTML=`<span>${msg}</span>`; document.body.appendChild(b); setTimeout(()=>b.classList.add("show"),20); setTimeout(()=>{ b.classList.remove("show"); setTimeout(()=>b.remove(),400); },4500);
   try{ if(navigator.vibrate) navigator.vibrate(kind==="eagle"?[120,60,120,60,300]:[80,40,160]); }catch(_){}
-  const a=birdieAudio[kind]; if(a && !self){ try{ a.currentTime=0; a.play().catch(()=>{}); }catch(_){} } }
+  const a=birdieAudio[kind]; if(a && !self && birdieSoundOn()){ try{ a.currentTime=0; a.play().catch(()=>{}); }catch(_){} } }
 
 // ---------- Pronos (podium du jour) ----------
 const PODIUM_PTS = {exact:3, inPodium:1, bonusOrder:3}; // place exacte 3 pts, dans le podium mais mauvaise place 1 pt, podium complet dans l'ordre +3 → max 12
@@ -1383,7 +1385,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261101-102850";
+const BUILD="20261101-103441";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
