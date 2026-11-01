@@ -1075,7 +1075,7 @@ function openScoreSheet(dayId,pid,group,matchIdx){
         return `<div class="hrow ${cls} ${locked?"locked":""}"><span class="hn">${i+1}</span><span class="hi">Par ${pr} · idx ${card.si[i]}<br>${card.tees[tee][i]} m ${"<i></i>".repeat(Math.max(0,rec))}</span>${locked?`<span></span>`:`<button data-dec="${i}">−</button>`}<span><span class="v ${g==null?"empty":""} num">${g==null?"·":pts===0?"✕":g}</span><div class="pts">${g==null?"":pts===0?"0 pt ("+g+")":pts+" pt"+(pts>1?"s":"")}</div></span>${locked?`<button data-unlock="${i}" title="Corriger ce trou">✎</button>`:`<button data-inc="${i}">+</button>`}</div>`; }).join("")}</div>
       <p class="muted small">Un trou se verrouille dès que le suivant est saisi. Pour corriger, appuie sur ✎ à droite du trou.</p><div class="grid2"><button class="btn ghost" id="fillPar">Pré-remplir les trous vides au par</button><button class="btn ghost" id="clearScore">Effacer toute la carte</button></div>`);
     const write=(arr,tee2)=>{ const key="live/score_"+dayId+"_"+pid; const cur=S.scores[scoreKey(dayId,pid)]||{}; const teeV=tee2||cur.tee||""; S.scores[scoreKey(dayId,pid)]={...cur,holes:arr,tee:teeV}; const prev=scoreWriteQ[key]||Promise.resolve(); scoreWriteQ[key]=prev.then(()=>S.db.doc(key).set({holes:arr.map(v=>v==null?null:v), tee:teeV, player:pid, day:dayId, by:S.uid||"", ts:Date.now()})).catch(e=>{ console.error(e); toast("Enregistrement refusé"); }); };
-    const upd=(i,delta)=>{ const arr=holes.slice(); const pr=card.par[i]; let v=arr[i]==null?pr:arr[i]; v=Math.max(1,Math.min(15,v+delta)); if(arr[i]==null && delta===0) v=pr; arr[i]=v; S.scores[scoreKey(dayId,pid)]={...(S.scores[scoreKey(dayId,pid)]||{}),holes:arr}; write(arr); draw(); };
+    const upd=(i,delta)=>{ const arr=holes.slice(); const pr=card.par[i]; const before=arr[i]; let v=arr[i]==null?pr:arr[i]; v=Math.max(1,Math.min(15,v+delta)); if(arr[i]==null && delta===0) v=pr; arr[i]=v; if(v<=pr-1 && (before==null || before>pr-1)) setTimeout(()=>notifyBirdie(dayId,pid,i+1),1200); S.scores[scoreKey(dayId,pid)]={...(S.scores[scoreKey(dayId,pid)]||{}),holes:arr}; write(arr); draw(); };
     $("#sheet").querySelectorAll("[data-ptab]").forEach(b=>b.onclick=()=>{ pid=b.dataset.ptab; draw(); });
     $("#sheet").querySelectorAll("[data-unlock]").forEach(b=>b.onclick=()=>{ unlocked.add(pid+":"+b.dataset.unlock); draw(); toast("Trou "+(+b.dataset.unlock+1)+" déverrouillé"); });
     $("#sheet").querySelectorAll("[data-stee]").forEach(b=>b.onclick=()=>{ write(holes.slice(), b.dataset.stee); draw(); toast("Départs "+(TEE_FR[b.dataset.stee]||b.dataset.stee)+" pour "+p.nick); });
@@ -1097,6 +1097,8 @@ function armBirdie(){ if(birdieArmed) return; birdieArmed=true; ["birdie","eagle
   const unlock=()=>{ Object.values(birdieAudio).forEach(a=>{ try{ a.volume=1; const pr=a.play(); if(pr) pr.then(()=>{ setTimeout(()=>{ a.pause(); a.currentTime=0; },30); }).catch(()=>{}); }catch(_){} }); if(cartWanted() && !cartMode) setCartMode(true,true); document.removeEventListener("touchend",unlock); document.removeEventListener("click",unlock); };
   document.addEventListener("touchend",unlock,{once:true}); document.addEventListener("click",unlock,{once:true}); }
 // ---------- Notifications push (app en arrière-plan / téléphone verrouillé) ----------
+const PUSH_URL="https://jambon-masters.netlify.app/.netlify/functions/push";
+function notifyBirdie(day,pid,hole){ try{ fetch(PUSH_URL,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({day,pid,hole,by:S.uid||""}),keepalive:true}).then(r=>r.json()).then(j=>console.log("push",j)).catch(e=>console.warn("push",e)); }catch(_){} }
 const VAPID_PUBLIC="BKuQ2LKIbb27alYWiaCaml_SmAnCSsrxT8iktlVuqLS11dI1AmFt5kwyB_-L41hsQHqluv1rGOxklM_hJ0mDfQM";
 function b64ToU8(s){ const pad="=".repeat((4-s.length%4)%4); const raw=atob((s+pad).replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from([...raw].map(c=>c.charCodeAt(0))); }
 function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
@@ -1419,7 +1421,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261101-115634";
+const BUILD="20261101-123357";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
