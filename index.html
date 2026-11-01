@@ -1192,7 +1192,7 @@ function openExpenseSheet(){
     if(!(amt>0)) return toast("Indique un montant"); if(!payer) return toast("Qui a payé ?"); if(!f.length) return toast("Pour qui ?");
     const mur = cur==="ZAR" ? amt*(S.cfg.rate||2.84) : amt;
     try{ await S.db.collection("expenses").add({label:$("#exLabel").value.trim(), orig:amt, cur, mur:Math.round(mur), payer, for:f, ts:Date.now(), by:S.uid||""}); closeSheet(); toast("Dépense ajoutée"); }
-    catch(e){ toast("Enregistrement refusé"); }
+    catch(e){ console.error(e); toast(e&&e.message&&/non lisible/.test(e.message)?e.message:"Photo refusée : "+(e&&e.code==="permission-denied"?"connexion à refaire (recharge l'app)":"réessaie dans un instant")); }
   };
 }
 
@@ -1212,7 +1212,12 @@ $("#fileIn").addEventListener("change", async e=>{
     toast("Photo enregistrée");
   }catch(err){ console.error(err); toast(err?.code==="too_large"?"Photo trop lourde":"Envoi impossible"); }
 });
-function shrink(file,max){ return new Promise((res,rej)=>{ const img=new Image(); const url=URL.createObjectURL(file); img.onload=()=>{ const s=Math.min(1,max/Math.max(img.width,img.height)); const c=document.createElement("canvas"); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); c.getContext("2d").drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url); c.toBlob(b=>b?res(b):rej(new Error("canvas")),"image/jpeg",.72); }; img.onerror=rej; img.src=url; }); }
+function loadImg(file){ return new Promise(async(res,rej)=>{ try{ if(window.createImageBitmap){ try{ const bm=await createImageBitmap(file); return res(bm); }catch(e){} } const img=new Image(); const url=URL.createObjectURL(file); img.onload=()=>{ URL.revokeObjectURL(url); res(img); }; img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error("Format d'image non lisible par ce téléphone")); }; img.src=url; }catch(e){ rej(e); } }); }
+function toBlob(c,q){ return new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error("canvas")),"image/jpeg",q)); }
+// Compression adaptative : un document Firestore est limité à 1 Mo, on vise < 650 Ko une fois encodé en base64 (×1,37)
+async function shrink(file,max){ const img=await loadImg(file); const W=img.width||img.naturalWidth, H=img.height||img.naturalHeight; let side=max, q=.72; const LIMIT=470000; let b;
+  for(let i=0;i<8;i++){ const s=Math.min(1,side/Math.max(W,H)); const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(W*s)); c.height=Math.max(1,Math.round(H*s)); c.getContext("2d").drawImage(img,0,0,c.width,c.height); b=await toBlob(c,q); if(b.size<=LIMIT) break; if(q>.5) q-=.1; else side=Math.round(side*.8); }
+  if(img.close) img.close(); return b; }
 
 // ---------- Feuilles (dialogues) ----------
 function sheet(html){ const prevIn=$("#sheet .in"); const keep=prevIn?prevIn.scrollTop:0; closeSheet(); const d=document.createElement("div"); d.className="sheet"; d.id="sheet"; d.innerHTML=`<div class="in">${html}</div>`; d.onclick=e=>{ if(e.target===d) closeSheet(); }; document.body.appendChild(d); if(keep) d.querySelector(".in").scrollTop=keep; d.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheet); }
@@ -1360,7 +1365,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261031-220718";
+const BUILD="20261101-092558";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
