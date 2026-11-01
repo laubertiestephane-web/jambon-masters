@@ -757,7 +757,7 @@ function renderHome(){
   const meP = playerById(myPlayerId());
   const welcome = meP ? ""
     : `<div class="welcome"><h2>Bienvenue à toi, petit jambon !</h2><span class="small">Dis-nous qui tu es : l'appli te reconnaîtra à chaque ouverture.</span><button class="btn primary" id="pickMe" style="justify-self:start;margin-top:6px">C'est moi…</button></div>`;
-  const html = `${welcome}${installCard()}${top}<div class="chips" style="margin:-4px 0 4px"><button class="chip" id="birdieToggle">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button><button class="chip" id="cartToggle" aria-pressed="${cartMode}">🛺 Mode voiturette${cartMode?" : actif":cartWanted()?" : touche l'écran pour réactiver":""}</button></div>${cartMode?`<p class="muted small" style="margin:-2px 0 6px">Écran maintenu allumé et alertes gardées actives même téléphone verrouillé. Volume média à fond !</p>`:""}${radioCard()}${weatherCard()}
+  const html = `${welcome}${installCard()}${top}<div class="chips" style="margin:-4px 0 4px"><button class="chip" id="birdieToggle">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button><button class="chip" id="pushBtn" aria-pressed="${pushState()==="granted"}">${pushState()==="granted"?"📳 Notifications : activées":pushState()==="denied"?"📳 Notifications : refusées (réglages tél.)":"📳 Activer les notifications"}</button><button class="chip" id="cartToggle" aria-pressed="${cartMode}">🛺 Mode voiturette${cartMode?" : actif":cartWanted()?" : touche l'écran pour réactiver":""}</button></div>${cartMode?`<p class="muted small" style="margin:-2px 0 6px">Écran maintenu allumé et alertes gardées actives même téléphone verrouillé. Volume média à fond !</p>`:""}${radioCard()}${weatherCard()}
   <div class="card"><div class="eyebrow">Jambon Masters · classement par équipe</div>
     <div class="score">
       <div class="team"><span class="name"><span class="dot" style="background:var(--teamA)"></span> ${esc(S.cfg.teamA.name)}</span><span class="pts num">${fmtPts(a)}</span></div>
@@ -773,7 +773,7 @@ function renderHome(){
   ${!S.dbReady ? `<p class="muted small" style="text-align:center">Connexion…</p>`:""}
   ${S.isOwner?"":`<button class="adminlink" id="adminLogin">Connexion organisateur</button>`}`;
   $("#p-home").innerHTML = html; bindPhotos($("#p-home"));
-  bindInstall(); const gl=$("#goLive"); if(gl) gl.onclick=()=>setTab("live"); const bt=$("#birdieToggle"); if(bt) bt.onclick=toggleBirdieSound; const ct=$("#cartToggle"); if(ct) ct.onclick=()=>setCartMode(!cartMode); const pm=$("#pickMe"); if(pm) pm.onclick=openPickMe; const al=$("#adminLogin"); if(al) al.onclick=adminLogin;
+  bindInstall(); const gl=$("#goLive"); if(gl) gl.onclick=()=>setTab("live"); const bt=$("#birdieToggle"); if(bt) bt.onclick=toggleBirdieSound; const ct=$("#cartToggle"); if(ct) ct.onclick=()=>setCartMode(!cartMode); const pb=$("#pushBtn"); if(pb) pb.onclick=()=>{ if(pushState()==="granted") toast("Déjà activées sur ce téléphone 👍"); else enablePush(); }; const pm=$("#pickMe"); if(pm) pm.onclick=openPickMe; const al=$("#adminLogin"); if(al) al.onclick=adminLogin;
 }
 
 function flightRow(f){ return `<div class="flight"><span class="t num">${esc(f.dep)} → ${esc(f.arr)}</span><div><span class="cities">${esc(f.from)} → ${esc(f.to)}</span><br><span class="muted small">${f.no?esc(f.no)+" · ":"<i>n° de vol à confirmer</i> · "}${esc(f.date)}${f.note?" · "+esc(f.note):""}</span></div></div>`; }
@@ -1096,6 +1096,18 @@ function toggleBirdieSound(){ const on=!birdieSoundOn(); try{ localStorage.setIt
 function armBirdie(){ if(birdieArmed) return; birdieArmed=true; ["birdie","eagle"].forEach(k=>{ const a=new Audio("radio/"+k+".mp3?v=3"); a.preload="auto"; birdieAudio[k]=a; }); // iOS : débloquer l'audio au premier geste
   const unlock=()=>{ Object.values(birdieAudio).forEach(a=>{ try{ a.volume=1; const pr=a.play(); if(pr) pr.then(()=>{ setTimeout(()=>{ a.pause(); a.currentTime=0; },30); }).catch(()=>{}); }catch(_){} }); if(cartWanted() && !cartMode) setCartMode(true,true); document.removeEventListener("touchend",unlock); document.removeEventListener("click",unlock); };
   document.addEventListener("touchend",unlock,{once:true}); document.addEventListener("click",unlock,{once:true}); }
+// ---------- Notifications push (app en arrière-plan / téléphone verrouillé) ----------
+const VAPID_PUBLIC="BKuQ2LKIbb27alYWiaCaml_SmAnCSsrxT8iktlVuqLS11dI1AmFt5kwyB_-L41hsQHqluv1rGOxklM_hJ0mDfQM";
+function b64ToU8(s){ const pad="=".repeat((4-s.length%4)%4); const raw=atob((s+pad).replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from([...raw].map(c=>c.charCodeAt(0))); }
+function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+function pushState(){ if(!pushSupported()) return "unsupported"; return Notification.permission; }
+async function enablePush(){ if(!pushSupported()){ const ios=/iPhone|iPad/.test(navigator.userAgent); toast(ios?"Sur iPhone : installe d'abord l'app sur l'écran d'accueil (Partager → Sur l'écran d'accueil), puis réessaie depuis l'app installée.":"Notifications non prises en charge par ce navigateur"); return; }
+  try{ const perm=await Notification.requestPermission(); if(perm!=="granted"){ toast("Notifications refusées — à autoriser dans les réglages du téléphone"); render(); return; }
+    const reg=await navigator.serviceWorker.ready; let sub=await reg.pushManager.getSubscription(); if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToU8(VAPID_PUBLIC)});
+    await S.db.doc("live/push_"+S.uid).set({kind:"push", sub:sub.toJSON(), uid:S.uid, player:myPlayerId()||"", ua:navigator.userAgent.slice(0,80), ts:Date.now()});
+    try{ localStorage.setItem("jm.push","on"); }catch{} toast("🔔 Notifications activées : les birdies sonneront même app en arrière-plan"); render(); }
+  catch(e){ console.error(e); toast("Activation impossible : "+(e.message||e)); } }
+async function refreshPush(){ try{ if(!pushSupported()||Notification.permission!=="granted"||!S.uid||!S.db) return; const reg=await navigator.serviceWorker.ready; const sub=await reg.pushManager.getSubscription(); if(sub) await S.db.doc("live/push_"+S.uid).set({kind:"push", sub:sub.toJSON(), uid:S.uid, player:myPlayerId()||"", ua:navigator.userAgent.slice(0,80), ts:Date.now()}); }catch(_){} }
 function cartWanted(){ try{ return localStorage.getItem("jm.cart")==="on"; }catch{ return false; } }
 // ---------- Mode voiturette : écran allumé + session audio maintenue en arrière-plan ----------
 let cartMode=false, wakeLock=null, bgAudio=null;
@@ -1382,7 +1394,7 @@ function recomputeOwner(){
   if(S.isOwner && !was){ toast("Bonjour l'organisateur !"); if(S.db){ seedIfEmpty(S.db); if(!reqSubStarted){ reqSubStarted=true; S.db.collection("adminRequests").onSnapshot(s=>{ S.adminRequests=s.docs.map(x=>({...x.data(), id:x.id})); if(S.tab==="admin") renderAdmin(); }, e=>console.warn("req",e)); } } }
   if(S.isOwner!==was){ renderTabs(); render(); }
 }
-function startSubs(db){ if(subsStarted) return; subsStarted=true; armBirdie();
+function startSubs(db){ if(subsStarted) return; subsStarted=true; armBirdie(); setTimeout(refreshPush,4000);
   const sub=(ref,fn)=>{ (window.__subs=window.__subs||{})[ref.path||ref.id]=fn; return ref.onSnapshot(s=>{fn(s); S.dbReady=true; if(S.tab!=="admin") render();}, e=>console.warn("db",e)); };
   sub(db.doc("config/main"), s=>{ if(s.exists){ const d=s.data(); S.cfg={...DEFAULT_CFG,...d, teamA:{...DEFAULT_CFG.teamA,...(d.teamA||{})}, teamB:{...DEFAULT_CFG.teamB,...(d.teamB||{})}}; ["out1","out2","ret1","ret2"].forEach(k=>S.cfg[k]={...DEFAULT_CFG[k],...(d[k]||{})}); } });
   sub(db.doc("config/main"), s=>{ if(!S.fx.live && S.cfg.rate>0) S.fx.rate=S.cfg.rate; });
@@ -1395,7 +1407,7 @@ function startSubs(db){ if(subsStarted) return; subsStarted=true; armBirdie();
   sub(db.collection("profiles"), s=>{ S.profiles={}; s.docs.forEach(x=>S.profiles[x.id]=x.data()); });
   sub(db.collection("expenses"), s=>{ S.expenses = s.docs.map(x=>({...x.data(), id:x.id})); });
   sub(db.collection("wall"), s=>{ S.wall = s.docs.map(x=>({...x.data(), id:x.id})); });
-  sub(db.collection("live"), s=>{ const prevScores=S.scores; S.live={}; S.scores={}; S.pronos={}; s.docs.forEach(x=>{ if(x.id.startsWith("score_")){ S.scores[x.id.slice(6)]=x.data(); } else if(x.id.startsWith("prono_")){ S.pronos[x.id.slice(6)]=x.data(); } else S.live[x.id]=x.data(); }); if(scoreSheet && scoreSheet.redraw && $("#sheet")) scoreSheet.redraw(); if((S.tab==="live"||S.tab==="pronos") && !$("#sheet")) render(); birdieWatch(prevScores); if(liveSheet && liveSheet.redraw && $("#sheet")) liveSheet.redraw(); });
+  sub(db.collection("live"), s=>{ const prevScores=S.scores; S.live={}; S.scores={}; S.pronos={}; s.docs.forEach(x=>{ if(x.id.startsWith("score_")){ S.scores[x.id.slice(6)]=x.data(); } else if(x.id.startsWith("prono_")){ S.pronos[x.id.slice(6)]=x.data(); } else if(x.id.startsWith("push_")){ } else S.live[x.id]=x.data(); }); if(scoreSheet && scoreSheet.redraw && $("#sheet")) scoreSheet.redraw(); if((S.tab==="live"||S.tab==="pronos") && !$("#sheet")) render(); birdieWatch(prevScores); if(liveSheet && liveSheet.redraw && $("#sheet")) liveSheet.redraw(); });
 }
 async function seedIfEmpty(db){
   try{ const ps=await db.collection("players").get(); if(!ps.empty) return;
@@ -1407,7 +1419,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261101-114427";
+const BUILD="20261101-115634";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
