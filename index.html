@@ -754,7 +754,7 @@ function renderHome(){
   const meP = playerById(myPlayerId());
   const welcome = meP ? ""
     : `<div class="welcome"><h2>Bienvenue à toi, petit jambon !</h2><span class="small">Dis-nous qui tu es : l'appli te reconnaîtra à chaque ouverture.</span><button class="btn primary" id="pickMe" style="justify-self:start;margin-top:6px">C'est moi…</button></div>`;
-  const html = `${welcome}${installCard()}${top}<button class="chip" id="birdieToggle" style="justify-self:start;margin:-4px 0 4px">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button>${radioCard()}${weatherCard()}
+  const html = `${welcome}${installCard()}${top}<div class="chips" style="margin:-4px 0 4px"><button class="chip" id="birdieToggle">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button><button class="chip" id="cartToggle" aria-pressed="${cartMode}">🛺 Mode voiturette${cartMode?" : actif":""}</button></div>${cartMode?`<p class="muted small" style="margin:-2px 0 6px">Écran maintenu allumé et alertes gardées actives même téléphone verrouillé. Volume média à fond !</p>`:""}${radioCard()}${weatherCard()}
   <div class="card"><div class="eyebrow">Jambon Masters · classement par équipe</div>
     <div class="score">
       <div class="team"><span class="name"><span class="dot" style="background:var(--teamA)"></span> ${esc(S.cfg.teamA.name)}</span><span class="pts num">${fmtPts(a)}</span></div>
@@ -770,7 +770,7 @@ function renderHome(){
   ${!S.dbReady ? `<p class="muted small" style="text-align:center">Connexion…</p>`:""}
   ${S.isOwner?"":`<button class="adminlink" id="adminLogin">Connexion organisateur</button>`}`;
   $("#p-home").innerHTML = html; bindPhotos($("#p-home"));
-  bindInstall(); const gl=$("#goLive"); if(gl) gl.onclick=()=>setTab("live"); const bt=$("#birdieToggle"); if(bt) bt.onclick=toggleBirdieSound; const pm=$("#pickMe"); if(pm) pm.onclick=openPickMe; const al=$("#adminLogin"); if(al) al.onclick=adminLogin;
+  bindInstall(); const gl=$("#goLive"); if(gl) gl.onclick=()=>setTab("live"); const bt=$("#birdieToggle"); if(bt) bt.onclick=toggleBirdieSound; const ct=$("#cartToggle"); if(ct) ct.onclick=()=>setCartMode(!cartMode); const pm=$("#pickMe"); if(pm) pm.onclick=openPickMe; const al=$("#adminLogin"); if(al) al.onclick=adminLogin;
 }
 
 function flightRow(f){ return `<div class="flight"><span class="t num">${esc(f.dep)} → ${esc(f.arr)}</span><div><span class="cities">${esc(f.from)} → ${esc(f.to)}</span><br><span class="muted small">${f.no?esc(f.no)+" · ":"<i>n° de vol à confirmer</i> · "}${esc(f.date)}${f.note?" · "+esc(f.note):""}</span></div></div>`; }
@@ -1093,6 +1093,20 @@ function toggleBirdieSound(){ const on=!birdieSoundOn(); try{ localStorage.setIt
 function armBirdie(){ if(birdieArmed) return; birdieArmed=true; ["birdie","eagle"].forEach(k=>{ const a=new Audio("radio/"+k+".mp3?v=3"); a.preload="auto"; birdieAudio[k]=a; }); // iOS : débloquer l'audio au premier geste
   const unlock=()=>{ Object.values(birdieAudio).forEach(a=>{ a.muted=true; a.play().then(()=>{ a.pause(); a.currentTime=0; a.muted=false; }).catch(()=>{ a.muted=false; }); }); document.removeEventListener("touchend",unlock); document.removeEventListener("click",unlock); };
   document.addEventListener("touchend",unlock,{once:true}); document.addEventListener("click",unlock,{once:true}); }
+// ---------- Mode voiturette : écran allumé + session audio maintenue en arrière-plan ----------
+let cartMode=false, wakeLock=null, bgAudio=null;
+async function setCartMode(on){ cartMode=on;
+  if(on){ try{ if(!bgAudio){ bgAudio=new Audio("radio/silence.mp3"); bgAudio.loop=true; bgAudio.volume=1; } await bgAudio.play(); }catch(e){ console.warn("bg audio",e); }
+    try{ if("mediaSession" in navigator){ navigator.mediaSession.metadata=new MediaMetadata({title:"Alertes birdie en veille",artist:"Jambon Masters",album:"Radio Jambon"}); navigator.mediaSession.playbackState="playing"; navigator.mediaSession.setActionHandler("pause",()=>setCartMode(false)); navigator.mediaSession.setActionHandler("play",()=>setCartMode(true)); } }catch(_){}
+    try{ if("wakeLock" in navigator){ wakeLock=await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release",()=>{ wakeLock=null; }); } }catch(e){ console.warn("wakelock",e); }
+    toast("🛺 Mode voiturette : écran allumé, alertes actives"); }
+  else { try{ bgAudio&&bgAudio.pause(); }catch(_){} try{ wakeLock&&wakeLock.release(); }catch(_){} wakeLock=null; try{ if("mediaSession" in navigator) navigator.mediaSession.playbackState="none"; }catch(_){} toast("Mode voiturette désactivé"); }
+  render(); }
+document.addEventListener("visibilitychange",async()=>{ if(document.visibilityState==="visible" && cartMode){ try{ if(!wakeLock && "wakeLock" in navigator) wakeLock=await navigator.wakeLock.request("screen"); }catch(_){} try{ bgAudio&&bgAudio.paused&&await bgAudio.play(); }catch(_){} } });
+function playAlarm(kind){ const src="radio/"+kind+".mp3?v=3";
+  if(cartMode && bgAudio){ // réutiliser la piste déjà autorisée (fonctionne en arrière-plan)
+    try{ bgAudio.loop=false; bgAudio.src=src; bgAudio.onended=()=>{ bgAudio.onended=null; bgAudio.src="radio/silence.mp3"; bgAudio.loop=true; bgAudio.play().catch(()=>{}); }; bgAudio.play().catch(()=>{}); return; }catch(_){} }
+  const a=birdieAudio[kind]; if(a){ try{ a.volume=1; boostAudio(a); a.currentTime=0; a.play().catch(()=>{}); }catch(_){} } }
 function birdieWatch(prev){ if(!birdieReady){ birdieReady=true; return; } if(Date.now()-birdieT0<10000) return; // pas d'alerte dans les 10 s qui suivent l'ouverture (cache → serveur)
   const t=todayId(); const now=Date.now(); const d=S.days.find(x=>x.id===t); if(!d||!CARDS[d.course]) return; const card=CARDS[d.course]; const me=myPlayerId(); const ev=[];
   for(const [k,v] of Object.entries(S.scores)){ if(!k.startsWith(t+"_")) continue; if(!v.ts || now-v.ts>120000) continue; /* seulement les saisies de moins de 2 min */ const pid=k.slice(t.length+1); const old=(prev[k]&&prev[k].holes)||[]; const nh=v.holes||[];
@@ -1101,7 +1115,7 @@ function birdieWatch(prev){ if(!birdieReady){ birdieReady=true; return; } if(Dat
   const self = e.pid===me; const msg=`${kind==="eagle"?"🦅":"🐦"} ${label} pour ${esc(p.nick)} au ${e.hole} !${ev.length>1?" (+"+(ev.length-1)+")":""}`;
   const b=document.createElement("div"); b.className="birdie-banner "+kind; b.innerHTML=`<span>${msg}</span>`; document.body.appendChild(b); setTimeout(()=>b.classList.add("show"),20); setTimeout(()=>{ b.classList.remove("show"); setTimeout(()=>b.remove(),400); },4500);
   try{ if(navigator.vibrate) navigator.vibrate(kind==="eagle"?[120,60,120,60,300]:[80,40,160]); }catch(_){}
-  const a=birdieAudio[kind]; if(a && !self && birdieSoundOn()){ try{ a.volume=1; boostAudio(a); a.currentTime=0; a.play().catch(()=>{}); }catch(_){} } }
+  if(!self && birdieSoundOn()) playAlarm(kind); }
 function boostAudio(a){ try{ if(a._boosted) { if(a._ctx&&a._ctx.state==="suspended") a._ctx.resume(); return; } const C=window.AudioContext||window.webkitAudioContext; if(!C) return; const ctx=new C(); const src=ctx.createMediaElementSource(a); const g=ctx.createGain(); g.gain.value=2.2; const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-6; comp.ratio.value=12; src.connect(g).connect(comp).connect(ctx.destination); a._boosted=true; a._ctx=ctx; if(ctx.state==="suspended") ctx.resume(); }catch(_){} }
 
 // ---------- Pronos (podium du jour) ----------
@@ -1386,7 +1400,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261101-105450";
+const BUILD="20261101-105631";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
