@@ -1361,7 +1361,7 @@ function recomputeOwner(){
   if(S.isOwner!==was){ renderTabs(); render(); }
 }
 function startSubs(db){ if(subsStarted) return; subsStarted=true; armBirdie();
-  const sub=(ref,fn)=>ref.onSnapshot(s=>{fn(s); S.dbReady=true; if(S.tab!=="admin") render();}, e=>console.warn("db",e));
+  const sub=(ref,fn)=>{ (window.__subs=window.__subs||{})[ref.path||ref.id]=fn; return ref.onSnapshot(s=>{fn(s); S.dbReady=true; if(S.tab!=="admin") render();}, e=>console.warn("db",e)); };
   sub(db.doc("config/main"), s=>{ if(s.exists){ const d=s.data(); S.cfg={...DEFAULT_CFG,...d, teamA:{...DEFAULT_CFG.teamA,...(d.teamA||{})}, teamB:{...DEFAULT_CFG.teamB,...(d.teamB||{})}}; ["out1","out2","ret1","ret2"].forEach(k=>S.cfg[k]={...DEFAULT_CFG[k],...(d[k]||{})}); } });
   sub(db.doc("config/main"), s=>{ if(!S.fx.live && S.cfg.rate>0) S.fx.rate=S.cfg.rate; });
   sub(db.doc("config/settled"), s=>{ S.settled = s.exists? {...s.data()} : {}; });
@@ -1373,7 +1373,7 @@ function startSubs(db){ if(subsStarted) return; subsStarted=true; armBirdie();
   sub(db.collection("profiles"), s=>{ S.profiles={}; s.docs.forEach(x=>S.profiles[x.id]=x.data()); });
   sub(db.collection("expenses"), s=>{ S.expenses = s.docs.map(x=>({...x.data(), id:x.id})); });
   sub(db.collection("wall"), s=>{ S.wall = s.docs.map(x=>({...x.data(), id:x.id})); });
-  sub(db.collection("live"), s=>{ S.live={}; S.scores={}; S.pronos={}; const prevScores=S.scores; s.docs.forEach(x=>{ if(x.id.startsWith("score_")){ S.scores[x.id.slice(6)]=x.data(); } else if(x.id.startsWith("prono_")){ S.pronos[x.id.slice(6)]=x.data(); } else S.live[x.id]=x.data(); }); if(scoreSheet && scoreSheet.redraw && $("#sheet")) scoreSheet.redraw(); if((S.tab==="live"||S.tab==="pronos") && !$("#sheet")) render(); birdieWatch(prevScores); if(liveSheet && liveSheet.redraw && $("#sheet")) liveSheet.redraw(); });
+  sub(db.collection("live"), s=>{ const prevScores=S.scores; S.live={}; S.scores={}; S.pronos={}; s.docs.forEach(x=>{ if(x.id.startsWith("score_")){ S.scores[x.id.slice(6)]=x.data(); } else if(x.id.startsWith("prono_")){ S.pronos[x.id.slice(6)]=x.data(); } else S.live[x.id]=x.data(); }); if(scoreSheet && scoreSheet.redraw && $("#sheet")) scoreSheet.redraw(); if((S.tab==="live"||S.tab==="pronos") && !$("#sheet")) render(); birdieWatch(prevScores); if(liveSheet && liveSheet.redraw && $("#sheet")) liveSheet.redraw(); });
 }
 async function seedIfEmpty(db){
   try{ const ps=await db.collection("players").get(); if(!ps.empty) return;
@@ -1385,7 +1385,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261101-103441";
+const BUILD="20261101-104738";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
