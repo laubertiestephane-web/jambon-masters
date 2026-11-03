@@ -620,17 +620,22 @@ function mvp(){ // MVP = cumul des points Stableford sur la semaine ; départage
     rows.forEach(x=>{ const a=acc[x.p.id]; a.stb+=x.r.stb; a.gross+=x.r.gross; a.days++; if(x.r.stb===best) a.wins++; }); }
   S.players.forEach(p=>acc[p.id].pts=acc[p.id].stb);
   return S.players.slice().sort((a,b)=>acc[b.id].stb-acc[a.id].stb||(acc[a.id].gross||1e9)-(acc[b.id].gross||1e9)||a.order-b.order).map(p=>({...p,...acc[p.id]})); }
-function smartDraw(dayId){
+function pairHistory(dayId){ // nombre de fois où deux joueurs ont déjà été partenaires / adversaires (toutes journées sauf dayId)
+  const partner={}, opp={}; const key=(x,y)=>x<y?x+"|"+y:y+"|"+x;
+  for(const d of S.days){ if(d.id===dayId) continue; for(const m of (d.matches||[])){ const a=(m.a||[]).filter(Boolean), b=(m.b||[]).filter(Boolean); if(a.length===2) partner[key(a[0],a[1])]=(partner[key(a[0],a[1])]||0)+1; if(b.length===2) partner[key(b[0],b[1])]=(partner[key(b[0],b[1])]||0)+1; for(const x of a) for(const y of b) opp[key(x,y)]=(opp[key(x,y)]||0)+1; } }
+  return {partner,opp,key}; }
+function drawCost(ms,h){ let cost=0, rep=[]; for(const m of ms){ const cp=h.partner[h.key(m.a[0],m.a[1])]||0, cq=h.partner[h.key(m.b[0],m.b[1])]||0; cost+=cp*cp*10+cq*cq*10; if(cp) rep.push([m.a[0],m.a[1],"partenaires",cp]); if(cq) rep.push([m.b[0],m.b[1],"partenaires",cq]);
+    for(const x of m.a) for(const y of m.b){ const c=h.opp[h.key(x,y)]||0; cost+=c*c*10; if(c) rep.push([x,y,"adversaires",c]); } } return {cost,rep}; }
+function smartDraw(dayId){ // exhaustif : toutes les façons d'apparier 6 Rouges (15) × 6 Bleus (15) × affectations (6) = 1 350 tirages, on garde le meilleur (ex æquo → au hasard)
   const A=teamOf("A").map(p=>p.id), B=teamOf("B").map(p=>p.id); if(A.length<6||B.length<6) return null;
-  const seen={}; const key=(x,y)=>x<y?x+"|"+y:y+"|"+x;
-  for(const d of S.days){ if(d.id===dayId) continue; for(const m of (d.matches||[])){ const four=[...(m.a||[]),...(m.b||[])].filter(Boolean); for(let i=0;i<four.length;i++) for(let j=i+1;j<four.length;j++) seen[key(four[i],four[j])]=(seen[key(four[i],four[j])]||0)+1; } }
-  const shuffle=a=>a.slice().sort(()=>Math.random()-.5);
-  let best=null, bestScore=Infinity;
-  for(let n=0;n<600;n++){ const a=shuffle(A), bb=shuffle(B); const ms=[0,1,2].map(i=>({a:[a[2*i],a[2*i+1]],b:[bb[2*i],bb[2*i+1]]}));
-    let score=0; for(const m of ms){ const four=[...m.a,...m.b]; for(let i=0;i<4;i++) for(let j=i+1;j<4;j++){ const c=seen[key(four[i],four[j])]||0; score+= c*c*(i<2&&j<2||i>=2&&j>=2?2:1); } }
-    if(score<bestScore){ bestScore=score; best=ms; if(score===0) break; } }
-  return best;
+  const h=pairHistory(dayId);
+  const pairings=ids=>{ if(ids.length===2) return [[ids]]; const [x,...rest]=ids; const out=[]; for(let i=0;i<rest.length;i++){ const y=rest[i]; const others=rest.filter((_,j)=>j!==i); for(const sub of pairings(others)) out.push([[x,y],...sub]); } return out; };
+  const perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+  const PA=pairings(A), PB=pairings(B); let best=[], bestCost=Infinity;
+  for(const pa of PA) for(const pb of PB) for(const pm of perms){ const ms=[0,1,2].map(i=>({a:pa[i],b:pb[pm[i]]})); const {cost}=drawCost(ms,h); if(cost<bestCost){ bestCost=cost; best=[ms]; } else if(cost===bestCost) best.push(ms); }
+  const pick=best[Math.floor(Math.random()*best.length)]; return pick.map(m=>({a:Math.random()<.5?m.a:[m.a[1],m.a[0]], b:Math.random()<.5?m.b:[m.b[1],m.b[0]]})).sort(()=>Math.random()-.5);
 }
+function drawReport(dayId,ms){ const h=pairHistory(dayId); const {rep}=drawCost(ms,h); if(!rep.length) return "Aucune répétition : tout le monde joue avec et contre de nouvelles têtes."; const nm=id=>playerById(id)?.nick||id; return "Répétitions inévitables : "+rep.map(([x,y,k,c])=>`${nm(x)} & ${nm(y)} (${k}, ${c+1}ᵉ fois)`).join(" · "); }
 function matchesHtml(d){ const ms=validMatches(d); if(!ms.length) return ""; const nm=id=>{const p=playerById(id); return p?esc(p.nick):"—";};
   return `<div class="matches">${ms.map((m,i)=>`<div class="match"><span class="mn">${i+1}</span><span class="mA">${(m.a||[]).map(nm).join(" & ")}</span><span class="mv">${PIG_HEAD.replace('class="pighead"','class="pighead sm"')}</span><span class="mB">${(m.b||[]).map(nm).join(" & ")}</span></div>`).join("")}</div>`; }
 function fmtPts(n){ return Number.isInteger(n)? String(n) : n.toFixed(1).replace(".",","); }
@@ -1330,7 +1335,7 @@ function renderAdmin(){
         ${(()=>{ const used=new Set(); (d.matches||[]).forEach(m=>[...(m?.a||[]),...(m?.b||[])].forEach(x=>{ if(x) used.add(x); }));
           return [0,1,2].map(i=>{ const m=(d.matches||[])[i]||{a:["",""],b:["",""]}; const opt=(team,v)=>`<option value="">—</option>`+teamOf(team).filter(p=>p.id===v||!used.has(p.id)).map(p=>`<option value="${p.id}" ${p.id===v?"selected":""}>${esc(p.nick)}</option>`).join("");
           return `<div class="adm-match"><select data-m="${i}" data-side="a" data-k="0">${opt("A",m.a?.[0])}</select><select data-m="${i}" data-side="a" data-k="1">${opt("A",m.a?.[1])}</select><span class="muted small">vs</span><select data-m="${i}" data-side="b" data-k="0">${opt("B",m.b?.[0])}</select><select data-m="${i}" data-side="b" data-k="1">${opt("B",m.b?.[1])}</select></div>`; }).join(""); })()}
-        <button class="btn sm ghost" data-shufflematches="1" style="justify-self:start">Tirer les parties au sort</button></div>
+        <button class="btn sm ghost" data-shufflematches="1" style="justify-self:start">Tirer les parties au sort (max. de partenaires et d'adversaires différents)</button>${validMatches(d).length===3?`<p class="muted small">${drawReport(d.id,validMatches(d))}</p>`:""}</div>
       <div class="seg"><button class="A" data-r="A" aria-pressed="${d.result==="A"}">${esc(c.teamA.name)}</button><button class="draw" data-r="draw" aria-pressed="${d.result==="draw"}">Égalité</button><button class="B" data-r="B" aria-pressed="${d.result==="B"}">${esc(c.teamB.name)}</button><button data-r="" aria-pressed="${!d.result}">${(()=>{const s=daySummary(d); return s&&s.done?"Auto (Live "+fmtPts(s.a)+"–"+fmtPts(s.b)+")":"À jouer";})()}</button></div>`:""}
       ${S.photos[d.id]?`<button class="btn sm ghost" data-rmphoto="${d.id}">Retirer la photo du jour</button>`:""}
     </div>`;}).join("")}
@@ -1377,7 +1382,7 @@ function renderAdmin(){
     el.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{ d.result=b.dataset.r; save("days/"+d.id,{...d}); renderAdmin(); });
     el.querySelectorAll("[data-tee]").forEach(b=>b.onclick=()=>{ d.tee=b.dataset.tee; save("days/"+d.id,{...d}); renderAdmin(); });
     el.querySelectorAll("select[data-m]").forEach(s=>s.onchange=()=>{ const ms=[0,1,2].map(i=>(d.matches||[])[i]||{a:["",""],b:["",""]}); const m=ms[+s.dataset.m]; m[s.dataset.side]=[...(m[s.dataset.side]||["",""])]; m[s.dataset.side][+s.dataset.k]=s.value; d.matches=ms; save("days/"+d.id,{...d}); renderAdmin(); const el2=document.querySelector(`.adm-day[data-day="${d.id}"]`); if(el2) el2.scrollIntoView({block:"nearest"}); });
-    el.querySelectorAll("[data-shufflematches]").forEach(b=>b.onclick=()=>{ const r=smartDraw(d.id); if(!r) return toast("Il faut 6 joueurs par équipe"); d.matches=r; save("days/"+d.id,{...d}); renderAdmin(); toast("Parties tirées : chacun joue avec un maximum de copains différents"); });
+    el.querySelectorAll("[data-shufflematches]").forEach(b=>b.onclick=()=>{ const r=smartDraw(d.id); if(!r) return toast("Il faut 6 joueurs par équipe"); d.matches=r; save("days/"+d.id,{...d}); renderAdmin(); toast(drawReport(d.id,r)); });
     el.querySelectorAll("[data-rmphoto]").forEach(b=>b.onclick=()=>confirmSheet("Retirer la photo de cette journée ?",async()=>{ await S.db.doc("photos/"+d.id).delete(); toast("Photo retirée"); })); });
   const plSave={}; root.querySelectorAll("[data-pl]").forEach(i=>i.oninput=e=>{ const p=playerById(i.dataset.pl); p[i.dataset.f]=e.target.value; (plSave[p.id]||(plSave[p.id]=debounce(()=>save("players/"+p.id,{...p}),600)))(); });
 }
@@ -1443,7 +1448,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261103-123741";
+const BUILD="20261103-232542";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
