@@ -280,6 +280,18 @@ img{max-width:100%}
 .prow button{width:40px;height:40px;border-radius:9px;background:var(--surface);font-weight:900;font-size:1.2rem;box-shadow:var(--shadow)}
 .prow .v{font-family:var(--display);font-size:1.3rem;text-align:center}.prow .v.empty{color:var(--muted);font-size:.9rem}
 .prow.done{opacity:.85}
+.htable{display:grid;gap:3px}
+.htable .hh,.htable .hr{display:grid;grid-template-columns:52px 1fr 1fr 64px;gap:6px;align-items:center}
+.htable .hh{font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;padding:0 6px}
+.htable .hh .A{color:var(--teamA)}.htable .hh .B{color:var(--teamB)}
+.htable .hr{background:var(--surface2);border-radius:8px;padding:4px 6px}
+.htable .hr.empty{opacity:.45}
+.htable .hn{font-family:var(--display);font-size:1rem}.htable .hn small{display:block;font-family:inherit;font-size:.6rem;color:var(--muted);font-weight:700}
+.htable .hr .A,.htable .hr .B{display:flex;align-items:baseline;gap:6px;padding:2px 6px;border-radius:6px}
+.htable .hr .A b{color:var(--teamA)}.htable .hr .B b{color:var(--teamB)}
+.htable .hr .A.win{background:color-mix(in srgb,var(--teamA) 14%,transparent)}.htable .hr .B.win{background:color-mix(in srgb,var(--teamB) 14%,transparent)}
+.htable .hr b{font-family:var(--display);font-size:1.05rem}.htable .hr small{font-size:.65rem;color:var(--muted);font-weight:700}
+.htable .diff{font-weight:800;font-size:.8rem;text-align:right;color:var(--muted)}.htable .diff.A{color:var(--teamA)}.htable .diff.B{color:var(--teamB)}
 .hstrip{display:grid;grid-template-columns:repeat(18,1fr);gap:2px;margin-top:4px;max-width:220px}
 .hstrip i{display:block;height:8px;border-radius:2px;background:var(--surface2)}
 .hstrip i.on{background:var(--pink)}.hstrip i.half{background:linear-gradient(90deg,var(--pink) 50%,var(--surface2) 50%)}
@@ -589,6 +601,16 @@ function contribCard(days,title,perHole){ const rows=contribRows(days); if(!rows
   return `<div class="card"><div class="eyebrow">Apport à l'équipe · ${esc(title)}</div>
     <div class="rank">${rows.map((x,i)=>`<span class="pos ${i<3?"top":""}">${i+1}</span><span class="nm"><b style="color:${x.p.team==="A"?"var(--teamA)":"var(--teamB)"}">${esc(x.p.nick)}</b><small>${fmt1(x.holes)} trou${x.holes>1?"s":""} retenu${x.holes>1?"s":""}${days.length>1?" · "+x.days+" j":""}</small>${perHole&&c?`<span class="hstrip">${c[x.p.id].per.map((h,k)=>`<i class="${h?(h.w<1?"half":"on"):""}" title="Trou ${k+1}${h?" : "+fmt1(h.pts)+" pt":""}"></i>`).join("")}</span>`:""}</span><span class="val num">${fmt1(x.pts)}</span><span class="thru">pts</span>`).join("")}</div>
     <p class="muted small">Points Stableford réellement comptés dans le total de son équipe (3 meilleurs par trou). ${perHole?"Barre : un carré par trou, plein = retenu, à moitié = ex æquo partagé.":""}</p></div>`; }
+function teamHoleTable(d){ if(!CARDS[d.course]) return ""; const card=CARDS[d.course]; const tp={A:S.players.filter(p=>p.team==="A"),B:S.players.filter(p=>p.team==="B")}; if(!tp.A.length||!tp.B.length) return "";
+  const pts={}; for(const p of [...tp.A,...tp.B]){ const r=computeScore(d,p); pts[p.id]=r.holes.map((g,i)=>g==null?null:Math.max(0,2+card.par[i]+strokesOnHole(r.ph,card.si[i])-g)); }
+  let cumA=0,cumB=0,any=false; const rows=[];
+  for(let i=0;i<18;i++){ const best=T=>{ const v=tp[T].map(p=>pts[p.id][i]).filter(x=>x!=null).sort((x,y)=>y-x); return {n:v.length,pts:v.slice(0,3).reduce((s,x)=>s+x,0),tot:tp[T].length}; }; const a=best("A"), b=best("B"); if(a.n||b.n) any=true; cumA+=a.pts; cumB+=b.pts; rows.push({i,a,b,cumA,cumB}); }
+  if(!any) return "";
+  const nA=esc(S.cfg.teamA.name), nB=esc(S.cfg.teamB.name);
+  return `<div class="card"><div class="eyebrow">Trou par trou · ${nA} vs ${nB}</div>
+    <div class="htable"><div class="hh"><span>Trou</span><span class="A">${nA.split(" ").pop()}</span><span class="B">${nB.split(" ").pop()}</span><span>Écart</span></div>
+    ${rows.map(r=>{ const played=r.a.n||r.b.n; const diff=r.cumA-r.cumB; const win=r.a.n&&r.b.n?(r.a.pts>r.b.pts?"A":r.b.pts>r.a.pts?"B":""):""; return `<div class="hr ${played?"":"empty"}"><span class="hn">${r.i+1}<small>par ${card.par[r.i]}</small></span><span class="A ${win==="A"?"win":""}"><b class="num">${r.a.n?r.a.pts:"·"}</b><small>${r.a.n?r.a.n+"/"+r.a.tot:""}</small></span><span class="B ${win==="B"?"win":""}"><b class="num">${r.b.n?r.b.pts:"·"}</b><small>${r.b.n?r.b.n+"/"+r.b.tot:""}</small></span><span class="diff ${diff>0?"A":diff<0?"B":""} num">${played?(diff>0?"+"+diff+" R":diff<0?"+"+(-diff)+" B":"="):""}</span></div>`; }).join("")}
+    </div><p class="muted small">Par trou : somme des 3 meilleurs Stableford de l'équipe · n/6 = joueurs ayant déjà saisi ce trou. Écart = cumul depuis le 1.</p></div>`; }
 function daySummary(d){ const gd=golfDays(); const isFinal = gd.length && d.id===gd[gd.length-1].id; if(isFinal){ const s=liveSummary(d); return s?{...s,kind:"mp"}:null; } return teamStb(d); }
 function effResult(d){ if(d.result) return d.result; const s=daySummary(d); if(s && s.done){ return s.a>s.b?"A":s.b>s.a?"B":"draw"; } return ""; }
 function points(){ let a=0,b=0; for(const d of S.days){ const r=effResult(d); if(r==="A")a++; else if(r==="B")b++; else if(r==="draw"){a+=.5;b+=.5;} } return {a,b}; }
@@ -993,7 +1015,7 @@ function renderLive(){
   const ps=S.players.slice().sort((a,b)=>a.order-b.order);
   const fallback = matches.length ? "" : `<div class="card"><div class="eyebrow">Saisir les scores</div><p class="muted small">Les parties de cette journée ne sont pas encore constituées (Réglages). En attendant, choisis un joueur :</p>
     <div class="plist">${ps.map(q=>{ const r=computeScore(d,q); return `<button data-score="${q.id}" ${can?"":"disabled"}><span class="av">${avatarHtml(q)}</span><span>${esc(q.nick)}<br><small class="muted">${r.n?`${r.n} trou${r.n>1?"s":""} · brut ${r.gross} · net ${r.net}`:"pas encore de score"}</small></span><span class="tot num">${r.n?r.stb+" pts":"—"}</span></button>`; }).join("")}</div></div>`;
-  $("#p-live").innerHTML = chips+head+(rows?`<div class="stack">${rows}</div>${isFinal?`<p class="muted small" style="text-align:center">Dernière journée : match play. Appuie sur une partie pour les scores ; le bouton « Match play » y donne le trou gagné.</p>`:""}`:"")+fallback+rankingCard(d)+(isFinal?"":contribCard([d],COURSES[d.course].short+" · "+p.dow+" "+p.d,true));
+  $("#p-live").innerHTML = chips+head+(rows?`<div class="stack">${rows}</div>${isFinal?`<p class="muted small" style="text-align:center">Dernière journée : match play. Appuie sur une partie pour les scores ; le bouton « Match play » y donne le trou gagné.</p>`:""}`:"")+fallback+(isFinal?"":teamHoleTable(d))+rankingCard(d)+(isFinal?"":contribCard([d],COURSES[d.course].short+" · "+p.dow+" "+p.d,true));
   $("#p-live").querySelectorAll("[data-lday]").forEach(b=>b.onclick=()=>{ S.liveDay=b.dataset.lday; renderLive(); });
   $("#p-live").querySelectorAll("[data-ms]").forEach(b=>b.onclick=()=>{ const m=matches[+b.dataset.ms]; openScoreSheet(d.id, m.a[0], [...m.a,...m.b], +b.dataset.ms); });
   $("#p-live").querySelectorAll("[data-score]").forEach(b=>b.onclick=()=>openScoreSheet(d.id,b.dataset.score));
@@ -1421,7 +1443,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261103-103954";
+const BUILD="20261103-123741";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
