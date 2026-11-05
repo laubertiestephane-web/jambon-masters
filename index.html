@@ -1429,7 +1429,7 @@ function startSubs(db){ if(subsStarted) return; subsStarted=true; armBirdie(); s
   sub(db.doc("config/main"), s=>{ if(!S.fx.live && S.cfg.rate>0) S.fx.rate=S.cfg.rate; });
   sub(db.doc("config/settled"), s=>{ S.settled = s.exists? {...s.data()} : {}; });
   sub(db.doc("config/admins"), s=>{ S.admins = s.exists ? (s.data().uids||[]) : []; recomputeOwner(); });
-  const NICK_FIX={tens:"El Padré"}; // demandé par Brad le 31/10 (ex-« Tens »)
+  const NICK_FIX={tens:"L'abbé"}; // 31/10 : Tens → El Padré ; 5/11 : El Padré → L'abbé du Cap, dit « L'abbé »
   sub(db.collection("players"), s=>{ if(!s.empty){ S.players = s.docs.map(x=>({team:"",order:0,...x.data(), id:x.id})); S.players.forEach(p=>{ if(NICK_FIX[p.id] && p.nick!==NICK_FIX[p.id]){ p.nick=NICK_FIX[p.id]; if(S.isOwner) S.db.doc("players/"+p.id).set({...p}).catch(()=>{}); } }); } });
   sub(db.collection("days"), s=>{ if(!s.empty){ const m={}; s.docs.forEach(x=>m[x.id]={...x.data(), id:x.id}); S.days = S.days.map(d=>m[d.id]?{...d,...m[d.id]}:d); } });
   sub(db.collection("photos"), s=>{ S.photos={}; s.docs.forEach(x=>S.photos[x.id]=x.data()); });
@@ -1448,7 +1448,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261104-221337";
+const BUILD="20261105-161450";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
