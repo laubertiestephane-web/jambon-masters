@@ -559,6 +559,8 @@ function dayTee(d){ const card=CARDS[d.course]; if(!card) return ""; const tees=
 function ratingFor(course,tee){ const o=((S.cfg.ratings||{})[course]||{})[tee] || (RATINGS[course]||{})[tee]; if(!o) return null; const cr=parseFloat(o[0]), sl=parseFloat(o[1]); return (cr>0&&sl>0)?{cr,slope:sl}:null; }
 // Épisodes Radio Jambon (fichiers dans /radio/)
 const RADIO = [ {day:"2026-11-06", title:"Journée de repos + avant-match J5 Simola", file:"radio/2026-11-06-avant.mp3", dur:"2 min 46"}, {day:"2026-11-04", title:"J4 · Pezula · compte rendu", file:"radio/2026-11-04.mp3", dur:"3 min 15"}, {day:"2026-11-03", title:"J3 · Plettenberg · compte rendu", file:"radio/2026-11-03.mp3", dur:"3 min 18"}, {day:"2026-11-03", title:"J3 · Plettenberg · avant-match", file:"radio/2026-11-03-avant.mp3", dur:"3 min 13"}, {day:"2026-11-01", title:"J2 · Knysna GC · compte rendu", file:"radio/2026-11-01.mp3", dur:"4 min 31"}, {day:"2026-11-01", title:"J2 · Knysna GC · avant-match", file:"radio/2026-11-01-avant.mp3?v=2", dur:"2 min 57"}, {day:"2026-10-31", title:"J1 · Simola · compte rendu", file:"radio/2026-10-31.mp3?v=2", dur:"4 min 41"} ];
+// Le Jambon Quotidien (unes dans /journal/)
+const JOURNAL = [ {day:"2026-11-05", n:5, title:"Égalité parfaite, infirmerie pleine"}, {day:"2026-11-04", n:4, title:"Les Jambons Rouges voient enfin rouge"} ];
 const VILLA = {name:"Cloud 9 Villa", estate:"Pezula Golf Estate", addr:"Welbedacht Lane, Rexford, Knysna 6571", phone:"+27 83 459 4540", maps:"Cloud+9+Estate+Welbedacht+Lane+Rexford+Knysna"};
 const PROSHOP = {name:"Pro Shop", addr:"Shop 55, Eden Meander Lifestyle Centre, Knysna Rd, George 6530", maps:"Shop+55+Eden+Meander+Lifestyle+Centre+Knysna+Rd+George+6530"};
 
@@ -716,6 +718,10 @@ async function loadWeather(key){ const g=GEO[key]; if(!g || S.wx[key]) return; t
 function wxAt(j, dayId, hour){ if(!j||!j.hourly) return null; const i=j.hourly.time.indexOf(dayId+"T"+String(hour).padStart(2,"0")+":00"); if(i<0) return null; return {t:j.hourly.temperature_2m[i], rain:j.hourly.precipitation_probability[i], wind:j.hourly.wind_speed_10m[i], code:j.hourly.weather_code[i]}; }
 function wxDay(j, dayId){ if(!j||!j.daily) return null; const i=j.daily.time.indexOf(dayId); if(i<0) return null; return {max:j.daily.temperature_2m_max[i], min:j.daily.temperature_2m_min[i], rain:j.daily.precipitation_probability_max[i], wind:j.daily.wind_speed_10m_max[i], code:j.daily.weather_code[i]}; }
 function teeHour(d){ const m=(d.teeTime||"").match(/(\d{1,2})\s*[h:]/); return m?+m[1]:13; }
+function journalCard(){ if(!JOURNAL.length) return ""; const e=JOURNAL[0]; const p=dparts(e.day);
+  return `<div class="card"><div class="eyebrow">📰 Le Jambon Quotidien · n° ${e.n} · ${p.dow} ${p.d} ${p.mon}</div>
+    <a href="journal/${e.day}.jpg" target="_blank" rel="noopener" style="display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:center;text-decoration:none;color:inherit"><img src="journal/${e.day}-thumb.jpg" alt="" style="width:96px;border-radius:8px;box-shadow:var(--shadow)"><span><b style="font-family:var(--display);font-size:1.1rem;line-height:1.1;display:block">${esc(e.title)}</b><span class="muted small">Appuie pour lire la une en grand · maintiens pour enregistrer</span></span></a>
+    ${JOURNAL.length>1?`<p class="small muted" style="margin-top:8px">Anciens numéros : ${JOURNAL.slice(1).map(x=>`<a href="journal/${x.day}.jpg" target="_blank" rel="noopener">n° ${x.n}</a>`).join(" · ")}</p>`:""}</div>`; }
 function radioCard(){ if(!RADIO.length) return ""; const eps=RADIO.slice(); const e=eps[0]; const p=dparts(e.day);
   return `<div class="card" style="background:linear-gradient(135deg,var(--navy),#2a3190);color:#fff"><div class="eyebrow" style="color:#ffb3d1">📻 Radio Jambon · le compte rendu du soir</div><h2 style="color:#fff">${esc(e.title)} · ${p.dow} ${p.d} ${p.mon}</h2>
     <audio controls preload="none" src="${e.file}" style="width:100%;margin:8px 0 4px"></audio>
@@ -784,7 +790,7 @@ function renderHome(){
   const meP = playerById(myPlayerId());
   const welcome = meP ? ""
     : `<div class="welcome"><h2>Bienvenue à toi, petit jambon !</h2><span class="small">Dis-nous qui tu es : l'appli te reconnaîtra à chaque ouverture.</span><button class="btn primary" id="pickMe" style="justify-self:start;margin-top:6px">C'est moi…</button></div>`;
-  const html = `${welcome}${installCard()}${top}<div class="chips" style="margin:-4px 0 4px"><button class="chip" id="birdieToggle">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button><button class="chip" id="pushBtn" aria-pressed="${pushState()==="granted"}">${pushState()==="granted"?"📳 Notifications : activées":pushState()==="denied"?"📳 Notifications : refusées (réglages tél.)":"📳 Activer les notifications"}</button><button class="chip" id="cartToggle" aria-pressed="${cartMode}">🛺 Mode voiturette${cartMode?" : actif":cartWanted()?" : touche l'écran pour réactiver":""}</button></div>${cartMode?`<p class="muted small" style="margin:-2px 0 6px">Écran maintenu allumé et alertes gardées actives même téléphone verrouillé. Volume média à fond !</p>`:""}${radioCard()}${weatherCard()}
+  const html = `${welcome}${installCard()}${top}<div class="chips" style="margin:-4px 0 4px"><button class="chip" id="birdieToggle">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button><button class="chip" id="pushBtn" aria-pressed="${pushState()==="granted"}">${pushState()==="granted"?"📳 Notifications : activées":pushState()==="denied"?"📳 Notifications : refusées (réglages tél.)":"📳 Activer les notifications"}</button><button class="chip" id="cartToggle" aria-pressed="${cartMode}">🛺 Mode voiturette${cartMode?" : actif":cartWanted()?" : touche l'écran pour réactiver":""}</button></div>${cartMode?`<p class="muted small" style="margin:-2px 0 6px">Écran maintenu allumé et alertes gardées actives même téléphone verrouillé. Volume média à fond !</p>`:""}${radioCard()}${journalCard()}${weatherCard()}
   <div class="card"><div class="eyebrow">Jambon Masters · classement par équipe</div>
     <div class="score">
       <div class="team"><span class="name"><span class="dot" style="background:var(--teamA)"></span> ${esc(S.cfg.teamA.name)}</span><span class="pts num">${fmtPts(a)}</span></div>
@@ -1448,7 +1454,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261106-111024";
+const BUILD="20261106-112510";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
