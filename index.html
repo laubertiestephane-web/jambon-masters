@@ -728,6 +728,10 @@ function journalCard(){ if(!JOURNAL.length) return ""; const e=JOURNAL[0]; const
   return `<div class="card"><div class="eyebrow">📰 Le Jambon Quotidien · n° ${e.n} · ${p.dow} ${p.d} ${p.mon}</div>
     <a href="journal/${e.day}.jpg" target="_blank" rel="noopener" style="display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:center;text-decoration:none;color:inherit"><img src="journal/${e.day}-thumb.jpg" alt="" style="width:96px;border-radius:8px;box-shadow:var(--shadow)"><span><b style="font-family:var(--display);font-size:1.1rem;line-height:1.1;display:block">${esc(e.title)}</b><span class="muted small">Appuie pour lire la une en grand · maintiens pour enregistrer</span></span></a>
     ${JOURNAL.length>1?`<p class="small muted" style="margin-top:8px">Anciens numéros : ${JOURNAL.slice(1).map(x=>`<a href="journal/${x.day}.jpg" target="_blank" rel="noopener">n° ${x.n}</a>`).join(" · ")}</p>`:""}</div>`; }
+const VIDEOS=[ {day:"2026-11-08", title:"Le teaser de la finale", file:"video/finale-2026-11-08.mp4", poster:"video/finale-2026-11-08-poster.jpg", dur:"1 min 03"} ];
+function videoCard(){ if(!VIDEOS.length) return ""; const v=VIDEOS[0];
+  return `<div class="card" style="padding:0;overflow:hidden"><video controls playsinline preload="none" poster="${v.poster}" src="${v.file}" style="width:100%;display:block;aspect-ratio:9/16;max-height:70vh;background:#000;object-fit:cover"></video>
+    <div style="padding:12px 16px"><div class="eyebrow">🎬 ${esc(v.title)} · ${esc(v.dur)}</div><div class="row" style="justify-content:space-between"><span class="small muted">Rouges – Bleus, 3-3 : le choc tant attendu.</span><a class="btn sm" href="${v.file}" download>Télécharger</a></div></div></div>`; }
 function radioCard(){ if(!RADIO.length) return ""; const eps=RADIO.slice(); const e=eps[0]; const p=dparts(e.day);
   return `<div class="card" style="background:linear-gradient(135deg,var(--navy),#2a3190);color:#fff"><div class="eyebrow" style="color:#ffb3d1">📻 Radio Jambon · le compte rendu du soir</div><h2 style="color:#fff">${esc(e.title)} · ${p.dow} ${p.d} ${p.mon}</h2>
     <audio controls preload="none" src="${e.file}" style="width:100%;margin:8px 0 4px"></audio>
@@ -796,7 +800,7 @@ function renderHome(){
   const meP = playerById(myPlayerId());
   const welcome = meP ? ""
     : `<div class="welcome"><h2>Bienvenue à toi, petit jambon !</h2><span class="small">Dis-nous qui tu es : l'appli te reconnaîtra à chaque ouverture.</span><button class="btn primary" id="pickMe" style="justify-self:start;margin-top:6px">C'est moi…</button></div>`;
-  const html = `${welcome}${installCard()}${top}<div class="chips" style="margin:-4px 0 4px"><button class="chip" id="birdieToggle">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button><button class="chip" id="pushBtn" aria-pressed="${pushState()==="granted"}">${pushState()==="granted"?"📳 Notifications : activées":pushState()==="denied"?"📳 Notifications : refusées (réglages tél.)":"📳 Activer les notifications"}</button><button class="chip" id="cartToggle" aria-pressed="${cartMode}">🛺 Mode voiturette${cartMode?" : actif":cartWanted()?" : touche l'écran pour réactiver":""}</button></div>${cartMode?`<p class="muted small" style="margin:-2px 0 6px">Écran maintenu allumé et alertes gardées actives même téléphone verrouillé. Volume média à fond !</p>`:""}${radioCard()}${journalCard()}${weatherCard()}
+  const html = `${welcome}${installCard()}${top}<div class="chips" style="margin:-4px 0 4px"><button class="chip" id="birdieToggle">${birdieSoundOn()?"🔔 Jingle birdie : activé":"🔕 Jingle birdie : coupé"}</button><button class="chip" id="pushBtn" aria-pressed="${pushState()==="granted"}">${pushState()==="granted"?"📳 Notifications : activées":pushState()==="denied"?"📳 Notifications : refusées (réglages tél.)":"📳 Activer les notifications"}</button><button class="chip" id="cartToggle" aria-pressed="${cartMode}">🛺 Mode voiturette${cartMode?" : actif":cartWanted()?" : touche l'écran pour réactiver":""}</button></div>${cartMode?`<p class="muted small" style="margin:-2px 0 6px">Écran maintenu allumé et alertes gardées actives même téléphone verrouillé. Volume média à fond !</p>`:""}${videoCard()}${radioCard()}${journalCard()}${weatherCard()}
   <div class="card"><div class="eyebrow">Jambon Masters · classement par équipe</div>
     <div class="score">
       <div class="team"><span class="name"><span class="dot" style="background:var(--teamA)"></span> ${esc(S.cfg.teamA.name)}</span><span class="pts num">${fmtPts(a)}</span></div>
@@ -1479,7 +1483,7 @@ async function seedIfEmpty(db){
   }catch(e){ console.error("seed",e); }
 }
 // Mise à jour automatique : on compare la version publiée à celle chargée.
-const BUILD="20261108-132848";
+const BUILD="20261108-141352";
 async function checkUpdate(){ try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); const j=await r.json(); if(j.build && j.build!==BUILD){ toast("Nouvelle version de l'app…"); setTimeout(()=>location.reload(),900); } }catch(e){} }
 setInterval(checkUpdate, 3*60*1000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checkUpdate(); });
